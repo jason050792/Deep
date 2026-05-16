@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="台股誌" />
+  <meta name="theme-color" content="#0e0e12" />
+  <title>台股誌 — 台股投資紀錄</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    html { height:100%; }
+    body { height:100%; font-size:max(16px,1rem); -webkit-tap-highlight-color:transparent; -webkit-text-size-adjust:100%; }
+    #root { height:100%; }
+
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    .card-hover:active { transform:scale(0.98); }
+    .row-hover:active { filter:brightness(1.12); }
+    input:focus { outline:none; }
+    ::-webkit-scrollbar { width:3px; }
+    ::-webkit-scrollbar-thumb { background:#2a2a3a; border-radius:4px; }
+
+    .app-header { position:fixed; top:0; left:0; right:0; z-index:50; }
+    .header-logo-row { display:flex; align-items:flex-end; padding:0 20px 8px; padding-top:env(safe-area-inset-top,54px); }
+    .header-nav-row { display:flex; justify-content:flex-end; align-items:center; padding:8px 20px 12px; border-bottom-width:1px; border-bottom-style:solid; }
+    .header-spacer { height:calc(env(safe-area-inset-top,54px) + 96px); }
+    .page-content { max-width:860px; margin:0 auto; padding:0 16px; padding-bottom:max(60px,calc(env(safe-area-inset-bottom)+40px)); }
+
+    .record-card { padding:14px 16px; border-bottom-width:1px; border-bottom-style:solid; display:flex; flex-direction:column; gap:10px; }
+    .record-card:last-child { border-bottom:none; }
+    .record-top { display:flex; align-items:center; justify-content:space-between; }
+    .record-ticker-wrap { display:flex; align-items:center; gap:10px; }
+    .record-meta { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; }
+    .record-meta-div { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; }
+    .record-meta-item { display:flex; flex-direction:column; gap:3px; }
+
+    .theme-dark {
+      --bg:#0e0e12; --bg2:#13131a; --bg3:#16161e;
+      --border:#1e1e28; --border2:#1a1a22; --border3:#2a2a3a;
+      --text:#e8e8f0; --text2:#c8c8d0; --text3:#888; --text4:#555; --text5:#444;
+      --gold:#C8A96E; --gold-bg:#C8A96E18;
+      --green:#6BAF8A; --green-bg:#1a2e20; --green-border:#2d5a38;
+      --red:#E07B5A; --red-bg:#2e1a1a; --red-border:#5a2d2d;
+      --blue:#7EB8A4; --blue-bg:#1a2e2a; --blue-border:#2d5a50;
+    }
+    .theme-light {
+      --bg:#f5f5f0; --bg2:#ffffff; --bg3:#efefea;
+      --border:#e0e0d8; --border2:#e8e8e0; --border3:#d0d0c8;
+      --text:#1a1a20; --text2:#3a3a40; --text3:#666; --text4:#888; --text5:#aaa;
+      --gold:#a07830; --gold-bg:#a0783018;
+      --green:#2d7a50; --green-bg:#e0f2e8; --green-border:#a0d4b8;
+      --red:#c05030; --red-bg:#fae8e0; --red-border:#e8b8a0;
+      --blue:#2d7a6a; --blue-bg:#e0f2ee; --blue-border:#a0d4c8;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useMemo, useEffect } = React;
+
+  // 台股常見股票代碼
+  const TICKER_NAMES = {
+    "0050":"元大台灣50", "0056":"元大高股息", "00878":"國泰永續高股息",
+    "00919":"群益台灣精選高息", "00929":"復華台灣科技優息", "00940":"元大台灣價值高息",
+    "2330":"台積電", "2317":"鴻海", "2454":"聯發科", "2382":"廣達",
+    "2308":"台達電", "2303":"聯電", "2881":"富邦金", "2882":"國泰金",
+    "2886":"兆豐金", "2884":"玉山金", "2891":"中信金", "2892":"第一金",
+    "2885":"元大金", "2883":"開發金", "1301":"台塑", "1303":"南亞",
+    "1326":"台化", "2002":"中鋼", "2412":"中華電", "3008":"大立光",
+    "2379":"瑞昱", "2357":"華碩", "2353":"宏碁", "2327":"國巨",
+    "3037":"欣興", "2395":"研華", "6505":"台塑化", "5880":"合庫金",
+    "2887":"台新金", "2890":"永豐金",
+  };
+
+  const COLORS = ["#C8A96E","#7EB8A4","#E07B5A","#8B9DC3","#C47EB5","#6BAF8A","#D4956A","#7CA3D4","#B5C46B","#D4A574"];
+
+  const TYPE_CONFIG = {
+    buy:      { label:"買入", bg:"var(--green-bg)", color:"var(--green)" },
+    sell:     { label:"賣出", bg:"var(--red-bg)",   color:"var(--red)"   },
+    dividend: { label:"股利", bg:"var(--blue-bg)",  color:"var(--blue)"  },
+  };
+
+  const EMPTY_FORM = {
+    ticker:"", type:"buy", shares:"", price:"", commission:"", dividend:"",
+    date: new Date().toISOString().split("T")[0]
+  };
+
+  function App() {
+    const [page, setPage]       = useState("home");
+    const [theme, setTheme]     = useState(() => localStorage.getItem("twstock_theme") || "dark");
+    const [records, setRecords] = useState(() => {
+      try { const s = localStorage.getItem("twstock_v1"); return s ? JSON.parse(s) : []; }
+      catch { return []; }
+    });
+    const [showForm, setShowForm]           = useState(false);
+    const [filterTicker, setFilterTicker]   = useState("ALL");
+    const [form, setForm]                   = useState(EMPTY_FORM);
+    const [formError, setFormError]         = useState("");
+    const [confirmDelete, setConfirmDelete] = useState(null);
+    const [editingId, setEditingId]         = useState(null);
+    const [editForm, setEditForm]           = useState(null);
+
+    useEffect(() => { try { localStorage.setItem("twstock_v1", JSON.stringify(records)); } catch {} }, [records]);
+    useEffect(() => { localStorage.setItem("twstock_theme", theme); }, [theme]);
+
+    const portfolio = useMemo(() => {
+      const map = {};
+      records.forEach(r => {
+        if (!map[r.ticker]) map[r.ticker] = { ticker:r.ticker, name:r.name, shares:0, cost:0, commission:0, dividend:0 };
+        const comm = r.commission || 0;
+        const div  = r.dividend  || 0;
+        if (r.type === "buy") {
+          map[r.ticker].shares += r.shares;
+          map[r.ticker].cost   += r.shares * r.price + comm;
+          map[r.ticker].commission += comm;
+        } else if (r.type === "sell") {
+          map[r.ticker].shares -= r.shares;
+          map[r.ticker].cost   -= r.shares * r.price - comm;
+          map[r.ticker].commission += comm;
+        } else if (r.type === "dividend") {
+          map[r.ticker].cost    -= div;
+          map[r.ticker].dividend += div;
+        }
+      });
+      return Object.values(map).filter(p => p.shares > 0.0001);
+    }, [records]);
+
+    const totalCost       = portfolio.reduce((s, p) => s + p.cost, 0);
+    const totalCommission = records.reduce((s, r) => s + (r.commission || 0), 0);
+    const totalDividend   = records.reduce((s, r) => s + (r.dividend  || 0), 0);
+
+    const tickers = ["ALL", ...Array.from(new Set(records.map(r => r.ticker)))];
+    const filteredRecords = filterTicker === "ALL" ? records : records.filter(r => r.ticker === filterTicker);
+
+    // ── Add ──
+    const handleAdd = () => {
+      const isDiv = form.type === "dividend";
+      if (!form.ticker) { setFormError("請填寫股票代碼"); return; }
+      if (isDiv) {
+        if (!form.dividend || +form.dividend <= 0) { setFormError("請填寫股利金額"); return; }
+      } else {
+        if (!form.shares || !form.price) { setFormError("請填寫股數與價格"); return; }
+        if (+form.shares <= 0 || +form.price <= 0) { setFormError("股數與價格須為正數"); return; }
+      }
+      const ticker = form.ticker.trim();
+      setRecords(prev => [...prev, {
+        id: Date.now(), ticker,
+        name: TICKER_NAMES[ticker] || ticker,
+        type: form.type,
+        shares:     isDiv ? 0 : +form.shares,
+        price:      isDiv ? 0 : +form.price,
+        commission: isDiv ? 0 : (form.commission ? +form.commission : 0),
+        dividend:   isDiv ? +form.dividend : 0,
+        date: form.date,
+      }]);
+      setForm(EMPTY_FORM);
+      setShowForm(false);
+      setFormError("");
+    };
+
+    // ── Delete ──
+    const handleDelete = (id) => { setRecords(prev => prev.filter(r => r.id !== id)); setConfirmDelete(null); };
+
+    // ── Edit ──
+    const openEdit = (r) => {
+      setEditingId(r.id);
+      setEditForm({
+        ticker: r.ticker, type: r.type,
+        shares: r.shares ? String(r.shares) : "",
+        price: r.price ? String(r.price) : "",
+        commission: r.commission ? String(r.commission) : "",
+        dividend: r.dividend ? String(r.dividend) : "",
+        date: r.date,
+      });
+    };
+
+    const handleEditSave = () => {
+      const isDiv = editForm.type === "dividend";
+      if (!editForm.ticker) return;
+      const ticker = editForm.ticker.trim();
+      setRecords(prev => prev.map(r => r.id === editingId ? {
+        ...r, ticker,
+        name: TICKER_NAMES[ticker] || ticker,
+        type: editForm.type,
+        shares:     isDiv ? 0 : +editForm.shares,
+        price:      isDiv ? 0 : +editForm.price,
+        commission: isDiv ? 0 : (editForm.commission ? +editForm.commission : 0),
+        dividend:   isDiv ? +editForm.dividend : 0,
+        date: editForm.date,
+      } : r));
+      setEditingId(null);
+      setEditForm(null);
+    };
+
+    const fmt = n => n.toLocaleString("zh-TW", { minimumFractionDigits:2, maximumFractionDigits:2 });
+    const fmtShares = n => n % 1 === 0 ? n.toLocaleString("zh-TW") : n.toFixed(2);
+    const fmtDate = d => { if (!d) return ""; const [y,m,day] = d.split("-"); return `${y.slice(2)}/${m}/${day}`; };
+    const isDark = theme === "dark";
+    const cv = v => `var(${v})`;
+
+    // Shared form body
+    const FormBody = ({ f, setF }) => {
+      const isDiv = f.type === "dividend";
+      const inp = (label, key, placeholder, type="text", extraStyle={}) => (
+        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+          <label style={{ fontSize:"0.68rem", color:cv("--text4"), letterSpacing:"0.08em", textTransform:"uppercase" }}>{label}</label>
+          <input style={{ background:cv("--bg"), border:`1px solid ${cv("--border3")}`, borderRadius:8, padding:"10px 12px", color:cv("--text"), fontSize:"1rem", fontFamily:"inherit", ...extraStyle }}
+            type={type} inputMode={type==="number"?"decimal":undefined}
+            placeholder={placeholder} value={f[key]}
+            onChange={e => setF(p => ({...p, [key]: e.target.value}))} />
+        </div>
+      );
+      return <>
+        <div style={{ marginBottom:16 }}>
+          <label style={{ fontSize:"0.68rem", color:cv("--text4"), letterSpacing:"0.08em", textTransform:"uppercase", display:"block", marginBottom:6 }}>類型</label>
+          <div style={{ display:"flex", gap:8 }}>
+            {["buy","sell","dividend"].map(t => {
+              const cfg = TYPE_CONFIG[t]; const active = f.type === t;
+              return (
+                <button key={t} onClick={() => setF(p => ({...p, type:t}))}
+                  style={{ flex:1, padding:"10px 0", border:`1px solid ${active?(t==="buy"?cv("--green-border"):t==="sell"?cv("--red-border"):cv("--blue-border")):cv("--border3")}`, borderRadius:10, background:active?cfg.bg:"transparent", color:active?cfg.color:cv("--text3"), cursor:"pointer", fontSize:"1rem", fontFamily:"inherit", fontWeight:active?700:400 }}>
+                  {cfg.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
+          {/* 股票代碼 — 台股用數字鍵盤 */}
+          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            <label style={{ fontSize:"0.68rem", color:cv("--text4"), letterSpacing:"0.08em", textTransform:"uppercase" }}>股票代碼</label>
+            <input style={{ background:cv("--bg"), border:`1px solid ${cv("--border3")}`, borderRadius:8, padding:"10px 12px", color:cv("--text"), fontSize:"1rem", fontFamily:"inherit" }}
+              type="text" inputMode="numeric" placeholder="e.g. 0050"
+              value={f.ticker} onChange={e => setF(p => ({...p, ticker: e.target.value}))} />
+          </div>
+          {!isDiv && <>
+            {inp("股數（股）", "shares", "1000", "number")}
+            {inp("成交價（元）", "price", "0.00", "number")}
+            {inp("手續費（元）", "commission", "0", "number")}
+          </>}
+          {isDiv && inp("股利金額（元）", "dividend", "0.00", "number", { borderColor:cv("--blue-border") })}
+          {inp("日期", "date", "", "date")}
+        </div>
+      </>;
+    };
+
+    return (
+      <div className={`theme-${theme}`} style={{ minHeight:"100vh", background:cv("--bg"), fontFamily:"system-ui,-apple-system,sans-serif", color:cv("--text"), fontSize:"1rem" }}>
+
+        {/* HEADER */}
+        <header className="app-header" style={{ background:cv("--bg") }}>
+          <div className="header-logo-row">
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:"1.3rem", color:cv("--gold") }}>◈</span>
+              <span style={{ fontSize:"1.05rem", letterSpacing:"0.15em", color:cv("--gold"), fontWeight:700 }}>台股誌</span>
+            </div>
+          </div>
+          <div className="header-nav-row" style={{ borderColor:cv("--border") }}>
+            <button onClick={() => setTheme(isDark?"light":"dark")}
+              style={{ background:"transparent", border:`1px solid ${cv("--border3")}`, color:cv("--text3"), borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:"1rem", marginRight:8, fontFamily:"inherit" }}>
+              {isDark?"☀️":"🌙"}
+            </button>
+            <nav style={{ display:"flex", gap:4, background:cv("--bg3"), borderRadius:10, padding:4 }}>
+              {[["home","總覽"],["records","紀錄"]].map(([p,label]) => (
+                <button key={p} onClick={() => setPage(p)}
+                  style={{ padding:"8px 22px", borderRadius:8, border:"none", background:page===p?cv("--gold"):"transparent", color:page===p?(isDark?"#0e0e12":"#fff"):cv("--text3"), cursor:"pointer", fontSize:"0.95rem", fontFamily:"inherit", fontWeight:page===p?700:400 }}>
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </header>
+
+        {/* DELETE CONFIRM */}
+        {confirmDelete !== null && (
+          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px" }}
+            onClick={() => setConfirmDelete(null)}>
+            <div style={{ background:cv("--bg2"),border:`1px solid ${cv("--border3")}`,borderRadius:20,padding:"32px 28px",width:"100%",maxWidth:340,textAlign:"center" }}
+              onClick={e => e.stopPropagation()}>
+              <p style={{ fontSize:"1rem",fontWeight:700,marginBottom:8 }}>確認刪除這筆紀錄？</p>
+              <p style={{ fontSize:"0.85rem",color:cv("--text4"),marginBottom:28 }}>此操作無法復原</p>
+              <div style={{ display:"flex",gap:10 }}>
+                <button style={{ flex:1,padding:"12px",borderRadius:10,border:`1px solid ${cv("--border3")}`,background:"transparent",color:cv("--text3"),cursor:"pointer",fontSize:"0.95rem",fontFamily:"inherit" }}
+                  onClick={() => setConfirmDelete(null)}>取消</button>
+                <button style={{ flex:1,padding:"12px",borderRadius:10,border:"none",background:"#E07B5A",color:"#fff",cursor:"pointer",fontSize:"0.95rem",fontFamily:"inherit",fontWeight:700 }}
+                  onClick={() => handleDelete(confirmDelete)}>刪除</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* EDIT MODAL */}
+        {editingId !== null && editForm && (
+          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center" }}
+            onClick={() => setEditingId(null)}>
+            <div className="fade-in" style={{ background:cv("--bg2"),border:`1px solid ${cv("--border3")}`,borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:600 }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
+                <h3 style={{ fontSize:"1rem",fontWeight:700,color:cv("--gold") }}>修改紀錄</h3>
+                <button onClick={() => setEditingId(null)} style={{ background:"transparent",border:"none",color:cv("--text3"),cursor:"pointer",fontSize:"1.2rem" }}>✕</button>
+              </div>
+              <FormBody f={editForm} setF={setEditForm} />
+              <button style={{ width:"100%",background:cv("--gold"),color:isDark?"#0e0e12":"#fff",border:"none",padding:"13px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:"1rem",fontFamily:"inherit" }}
+                onClick={handleEditSave}>儲存修改</button>
+            </div>
+          </div>
+        )}
+
+        <div className="page-content">
+          <div className="header-spacer" />
+
+          {/* ══ HOME ══ */}
+          {page === "home" && (
+            <div className="fade-in">
+              <div style={{ padding:"28px 0 20px", textAlign:"center" }}>
+                <p style={{ fontSize:"0.75rem",letterSpacing:"0.14em",color:cv("--text4"),textTransform:"uppercase",marginBottom:8 }}>淨投入成本（扣除股利）</p>
+                <h1 style={{ fontSize:"clamp(2rem,8vw,3.4rem)",fontWeight:700,color:cv("--gold"),margin:"0 0 8px",letterSpacing:"-0.01em" }}>
+                  NT${fmt(totalCost)}
+                </h1>
+                <p style={{ color:cv("--text4"),fontSize:"0.85rem",lineHeight:1.8 }}>
+                  {portfolio.length} 支持倉 ・ 手續費 NT${fmt(totalCommission)}
+                  {totalDividend > 0 && <> ・ 已收股利 <span style={{ color:cv("--blue") }}>NT${fmt(totalDividend)}</span></>}
+                </p>
+              </div>
+
+              {portfolio.length > 0 && <>
+                <div style={{ display:"flex",height:6,borderRadius:4,overflow:"hidden",marginBottom:12,gap:2 }}>
+                  {portfolio.map((p,i) => (
+                    <div key={p.ticker} style={{ height:"100%",borderRadius:2,width:`${(p.cost/totalCost)*100}%`,background:COLORS[i%COLORS.length] }} />
+                  ))}
+                </div>
+                <div style={{ display:"flex",flexWrap:"wrap",gap:"6px 16px",marginBottom:28,justifyContent:"center" }}>
+                  {portfolio.map((p,i) => (
+                    <div key={p.ticker} style={{ display:"flex",alignItems:"center",gap:6 }}>
+                      <span style={{ width:8,height:8,borderRadius:"50%",background:COLORS[i%COLORS.length],flexShrink:0,display:"inline-block" }} />
+                      <span style={{ fontSize:"0.78rem",color:cv("--text3") }}>{p.ticker} {p.name}</span>
+                      <span style={{ fontSize:"0.78rem",color:cv("--text4") }}>{((p.cost/totalCost)*100).toFixed(1)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </>}
+
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12 }}>
+                {portfolio.map((p,i) => {
+                  const pct = totalCost > 0 ? (p.cost/totalCost)*100 : 0;
+                  return (
+                    <div key={p.ticker} className="card-hover"
+                      style={{ background:cv("--bg2"),border:`1px solid ${cv("--border")}`,borderRadius:16,padding:"18px 20px",transition:"all 0.2s" }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4 }}>
+                        <div>
+                          <div style={{ fontSize:"0.85rem",fontWeight:700,letterSpacing:"0.06em",padding:"4px 12px",borderRadius:8,border:`1px solid ${COLORS[i%COLORS.length]}55`,background:COLORS[i%COLORS.length]+"22",color:COLORS[i%COLORS.length],display:"inline-block" }}>
+                            {p.ticker}
+                          </div>
+                        </div>
+                        <div style={{ display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1 }}>
+                          <span style={{ fontSize:"1.6rem",fontWeight:700,lineHeight:1,color:COLORS[i%COLORS.length] }}>{pct.toFixed(1)}%</span>
+                          <span style={{ fontSize:"0.65rem",color:cv("--text4") }}>佔全數投資</span>
+                        </div>
+                      </div>
+                      <p style={{ fontSize:"0.78rem",color:cv("--text4"),marginBottom:14,marginTop:4 }}>{p.name}</p>
+                      <div style={{ display:"flex",gap:10,marginBottom:8 }}>
+                        {[
+                          ["持有股數", fmtShares(p.shares)+"股"],
+                          ["均價", `NT$${fmt(p.cost/p.shares)}`],
+                          ["淨成本", `NT$${fmt(p.cost)}`],
+                        ].map(([l,v]) => (
+                          <div key={l} style={{ flex:1 }}>
+                            <span style={{ display:"block",fontSize:"0.65rem",color:cv("--text4"),marginBottom:3,letterSpacing:"0.04em" }}>{l}</span>
+                            <span style={{ fontSize:"0.85rem",color:cv("--text2"),fontWeight:600 }}>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display:"flex",gap:12,marginBottom:10 }}>
+                        {p.commission > 0 && <span style={{ fontSize:"0.72rem",color:cv("--text4") }}>手續費 NT${fmt(p.commission)}</span>}
+                        {p.dividend > 0 && <span style={{ fontSize:"0.72rem",color:cv("--blue") }}>已收股利 NT${fmt(p.dividend)}</span>}
+                      </div>
+                      <div style={{ height:3,background:cv("--border"),borderRadius:2 }}>
+                        <div style={{ height:"100%",borderRadius:2,width:`${pct}%`,background:COLORS[i%COLORS.length] }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {portfolio.length === 0 && (
+                <div style={{ textAlign:"center",padding:"64px 0",color:cv("--text4") }}>
+                  <span style={{ display:"block",fontSize:"2.5rem",marginBottom:14,color:cv("--border") }}>◎</span>
+                  <p style={{ marginBottom:20,fontSize:"1rem" }}>尚無持倉，前往紀錄頁新增交易</p>
+                  <button style={{ background:"transparent",border:`1px solid ${cv("--gold")}`,color:cv("--gold"),padding:"10px 24px",borderRadius:8,cursor:"pointer",fontSize:"1rem",fontFamily:"inherit" }}
+                    onClick={() => setPage("records")}>前往紀錄頁 →</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══ RECORDS ══ */}
+          {page === "records" && (
+            <div className="fade-in">
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"24px 0 18px" }}>
+                <div>
+                  <h2 style={{ fontSize:"1.3rem",fontWeight:700,margin:"0 0 4px" }}>交易紀錄</h2>
+                  <p style={{ color:cv("--text4"),fontSize:"0.82rem" }}>共 {records.length} 筆</p>
+                </div>
+                <button style={{ background:cv("--gold"),color:isDark?"#0e0e12":"#fff",border:"none",padding:"10px 20px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:"1rem",fontFamily:"inherit",flexShrink:0 }}
+                  onClick={() => { setShowForm(!showForm); setFormError(""); }}>
+                  {showForm?"✕ 取消":"+ 新增"}
+                </button>
+              </div>
+
+              {showForm && (
+                <div className="fade-in" style={{ background:cv("--bg2"),border:`1px solid ${cv("--border")}`,borderRadius:16,padding:"22px",marginBottom:18 }}>
+                  <h3 style={{ fontSize:"0.95rem",color:cv("--gold"),marginBottom:16 }}>新增紀錄</h3>
+                  <FormBody f={form} setF={setForm} />
+                  {formError && <p style={{ color:"#E07B5A",fontSize:"0.88rem",marginBottom:12 }}>{formError}</p>}
+                  <button style={{ background:cv("--gold"),color:isDark?"#0e0e12":"#fff",border:"none",padding:"12px 26px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:"1rem",fontFamily:"inherit" }}
+                    onClick={handleAdd}>確認新增</button>
+                </div>
+              )}
+
+              <div style={{ display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" }}>
+                {tickers.map(t => (
+                  <button key={t} onClick={() => setFilterTicker(t)}
+                    style={{ padding:"6px 14px",borderRadius:8,border:`1px solid ${filterTicker===t?cv("--gold")+"44":cv("--border")}`,background:filterTicker===t?cv("--gold-bg"):"transparent",color:filterTicker===t?cv("--gold"):cv("--text4"),cursor:"pointer",fontSize:"0.9rem",fontFamily:"inherit" }}>
+                    {t === "ALL" ? "全部" : `${t} ${TICKER_NAMES[t]||""}`}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ background:cv("--bg2"),border:`1px solid ${cv("--border")}`,borderRadius:16,overflow:"hidden" }}>
+                {filteredRecords.length === 0 && (
+                  <div style={{ textAlign:"center",padding:"40px 0",color:cv("--text4"),fontSize:"0.95rem" }}>無紀錄</div>
+                )}
+                {[...filteredRecords].reverse().map(r => {
+                  const cfg = TYPE_CONFIG[r.type] || TYPE_CONFIG.buy;
+                  const isDiv = r.type === "dividend";
+                  return (
+                    <div key={r.id} className="record-card" style={{ borderColor:cv("--border2") }}>
+                      <div className="record-top">
+                        <div className="record-ticker-wrap">
+                          <span style={{ fontWeight:700,color:cv("--gold"),fontSize:"1rem" }}>{r.ticker}</span>
+                          <span style={{ fontSize:"0.72rem",color:cv("--text4") }}>{r.name}</span>
+                          <span style={{ fontSize:"0.75rem",padding:"3px 9px",borderRadius:20,fontWeight:600,background:cfg.bg,color:cfg.color }}>{cfg.label}</span>
+                        </div>
+                        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                          {isDiv
+                            ? <span style={{ fontSize:"1.05rem",fontWeight:700,color:cv("--blue") }}>NT${fmt(r.dividend)}</span>
+                            : <span style={{ fontSize:"1.05rem",fontWeight:700,color:cv("--text") }}>NT${fmt(r.shares*r.price)}</span>
+                          }
+                          <button onClick={() => openEdit(r)}
+                            style={{ background:"transparent",border:`1px solid ${cv("--border3")}`,color:cv("--text3"),cursor:"pointer",fontSize:"0.78rem",padding:"4px 10px",borderRadius:6,fontFamily:"inherit" }}>
+                            修改
+                          </button>
+                          <button onClick={() => setConfirmDelete(r.id)}
+                            style={{ background:"transparent",border:"none",color:cv("--text5"),cursor:"pointer",fontSize:"0.85rem",padding:"4px 6px",borderRadius:4,fontFamily:"inherit" }}>✕</button>
+                        </div>
+                      </div>
+
+                      {isDiv ? (
+                        <div className="record-meta-div">
+                          {[["股利金額",`NT$${fmt(r.dividend)}`],["日期",fmtDate(r.date)]].map(([l,v]) => (
+                            <div key={l} className="record-meta-item">
+                              <span style={{ fontSize:"0.68rem",color:cv("--text4") }}>{l}</span>
+                              <span style={{ fontSize:"0.88rem",color:cv("--text2"),fontWeight:500 }}>{v}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="record-meta">
+                          {[["股數",fmtShares(r.shares)+"股"],["成交價",`NT$${fmt(r.price)}`],["手續費",`NT$${fmt(r.commission||0)}`],["日期",fmtDate(r.date)]].map(([l,v]) => (
+                            <div key={l} className="record-meta-item">
+                              <span style={{ fontSize:"0.68rem",color:cv("--text4") }}>{l}</span>
+                              <span style={{ fontSize:"0.88rem",color:cv("--text2"),fontWeight:500 }}>{v}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
