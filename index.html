@@ -238,7 +238,7 @@
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
             <label style={{ fontSize:"0.68rem", color:cv("--text4"), letterSpacing:"0.08em", textTransform:"uppercase" }}>股票代碼</label>
             <input style={{ background:cv("--bg"), border:`1px solid ${cv("--border3")}`, borderRadius:8, padding:"10px 12px", color:cv("--text"), fontSize:"1rem", fontFamily:"inherit" }}
-              type="text" inputMode="numeric" placeholder="e.g. 0050"
+              type="text" inputMode="text" placeholder="e.g. 0050"
               value={f.ticker} onChange={e => setF(p => ({...p, ticker: e.target.value}))} />
           </div>
           {!isDiv && <>
