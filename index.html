@@ -1,512 +1,851 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="台股誌" />
-  <meta name="theme-color" content="#0e0e12" />
-  <title>台股誌 — 台股投資紀錄</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-    html { height:100%; }
-    body { height:100%; font-size:max(16px,1rem); -webkit-tap-highlight-color:transparent; -webkit-text-size-adjust:100%; }
-    #root { height:100%; }
+import { useState, useEffect } from "react";
 
-    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-    .fade-in { animation: fadeIn 0.3s ease; }
-    .card-hover:active { transform:scale(0.98); }
-    .row-hover:active { filter:brightness(1.12); }
-    input:focus { outline:none; }
-    ::-webkit-scrollbar { width:3px; }
-    ::-webkit-scrollbar-thumb { background:#2a2a3a; border-radius:4px; }
+// ─── Palette & Theme ───────────────────────────────────────────────────────
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
 
-    .app-header { position:fixed; top:0; left:0; right:0; z-index:50; }
-    .header-logo-row { display:flex; align-items:flex-end; padding:0 20px 8px; padding-top:env(safe-area-inset-top,54px); }
-    .header-nav-row { display:flex; justify-content:flex-end; align-items:center; padding:8px 20px 12px; border-bottom-width:1px; border-bottom-style:solid; }
-    .header-spacer { height:calc(env(safe-area-inset-top,54px) + 96px); }
-    .page-content { max-width:860px; margin:0 auto; padding:0 16px; padding-bottom:max(60px,calc(env(safe-area-inset-bottom)+40px)); }
-
-    .record-card { padding:14px 16px; border-bottom-width:1px; border-bottom-style:solid; display:flex; flex-direction:column; gap:10px; }
-    .record-card:last-child { border-bottom:none; }
-    .record-top { display:flex; align-items:center; justify-content:space-between; }
-    .record-ticker-wrap { display:flex; align-items:center; gap:10px; }
-    .record-meta { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; }
-    .record-meta-div { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; }
-    .record-meta-item { display:flex; flex-direction:column; gap:3px; }
-
-    .theme-dark {
-      --bg:#0e0e12; --bg2:#13131a; --bg3:#16161e;
-      --border:#1e1e28; --border2:#1a1a22; --border3:#2a2a3a;
-      --text:#e8e8f0; --text2:#c8c8d0; --text3:#888; --text4:#555; --text5:#444;
-      --gold:#C8A96E; --gold-bg:#C8A96E18;
-      --green:#6BAF8A; --green-bg:#1a2e20; --green-border:#2d5a38;
-      --red:#E07B5A; --red-bg:#2e1a1a; --red-border:#5a2d2d;
-      --blue:#7EB8A4; --blue-bg:#1a2e2a; --blue-border:#2d5a50;
-    }
-    .theme-light {
-      --bg:#f5f5f0; --bg2:#ffffff; --bg3:#efefea;
-      --border:#e0e0d8; --border2:#e8e8e0; --border3:#d0d0c8;
-      --text:#1a1a20; --text2:#3a3a40; --text3:#666; --text4:#888; --text5:#aaa;
-      --gold:#a07830; --gold-bg:#a0783018;
-      --green:#2d7a50; --green-bg:#e0f2e8; --green-border:#a0d4b8;
-      --red:#c05030; --red-bg:#fae8e0; --red-border:#e8b8a0;
-      --blue:#2d7a6a; --blue-bg:#e0f2ee; --blue-border:#a0d4c8;
-    }
-  </style>
-</head>
-<body>
-<div id="root"></div>
-<script type="text/babel">
-  const { useState, useMemo, useEffect } = React;
-
-  // 台股常見股票代碼
-  const TICKER_NAMES = {
-    "0050":"元大台灣50", "0056":"元大高股息", "00878":"國泰永續高股息",
-    "00919":"群益台灣精選高息", "00929":"復華台灣科技優息", "00940":"元大台灣價值高息",
-    "2330":"台積電", "2317":"鴻海", "2454":"聯發科", "2382":"廣達",
-    "2308":"台達電", "2303":"聯電", "2881":"富邦金", "2882":"國泰金",
-    "2886":"兆豐金", "2884":"玉山金", "2891":"中信金", "2892":"第一金",
-    "2885":"元大金", "2883":"開發金", "1301":"台塑", "1303":"南亞",
-    "1326":"台化", "2002":"中鋼", "2412":"中華電", "3008":"大立光",
-    "2379":"瑞昱", "2357":"華碩", "2353":"宏碁", "2327":"國巨",
-    "3037":"欣興", "2395":"研華", "6505":"台塑化", "5880":"合庫金",
-    "2887":"台新金", "2890":"永豐金",
-  };
-
-  const COLORS = ["#C8A96E","#7EB8A4","#E07B5A","#8B9DC3","#C47EB5","#6BAF8A","#D4956A","#7CA3D4","#B5C46B","#D4A574"];
-
-  const TYPE_CONFIG = {
-    buy:      { label:"買入", bg:"var(--green-bg)", color:"var(--green)" },
-    sell:     { label:"賣出", bg:"var(--red-bg)",   color:"var(--red)"   },
-    dividend: { label:"股利", bg:"var(--blue-bg)",  color:"var(--blue)"  },
-  };
-
-  const EMPTY_FORM = {
-    ticker:"", type:"buy", shares:"", price:"", commission:"", dividend:"",
-    date: new Date().toISOString().split("T")[0]
-  };
-
-  function App() {
-    const [page, setPage]       = useState("home");
-    const [theme, setTheme]     = useState(() => localStorage.getItem("twstock_theme") || "dark");
-    const [records, setRecords] = useState(() => {
-      try { const s = localStorage.getItem("twstock_v1"); return s ? JSON.parse(s) : []; }
-      catch { return []; }
-    });
-    const [showForm, setShowForm]           = useState(false);
-    const [filterTicker, setFilterTicker]   = useState("ALL");
-    const [form, setForm]                   = useState(EMPTY_FORM);
-    const [formError, setFormError]         = useState("");
-    const [confirmDelete, setConfirmDelete] = useState(null);
-    const [editingId, setEditingId]         = useState(null);
-    const [editForm, setEditForm]           = useState(null);
-
-    useEffect(() => { try { localStorage.setItem("twstock_v1", JSON.stringify(records)); } catch {} }, [records]);
-    useEffect(() => { localStorage.setItem("twstock_theme", theme); }, [theme]);
-
-    const portfolio = useMemo(() => {
-      const map = {};
-      records.forEach(r => {
-        if (!map[r.ticker]) map[r.ticker] = { ticker:r.ticker, name:r.name, shares:0, cost:0, commission:0, dividend:0 };
-        const comm = r.commission || 0;
-        const div  = r.dividend  || 0;
-        if (r.type === "buy") {
-          map[r.ticker].shares += r.shares;
-          map[r.ticker].cost   += r.shares * r.price + comm;
-          map[r.ticker].commission += comm;
-        } else if (r.type === "sell") {
-          map[r.ticker].shares -= r.shares;
-          map[r.ticker].cost   -= r.shares * r.price - comm;
-          map[r.ticker].commission += comm;
-        } else if (r.type === "dividend") {
-          map[r.ticker].cost    -= div;
-          map[r.ticker].dividend += div;
-        }
-      });
-      return Object.values(map).filter(p => p.shares > 0.0001);
-    }, [records]);
-
-    const totalCost       = portfolio.reduce((s, p) => s + p.cost, 0);
-    const totalCommission = records.reduce((s, r) => s + (r.commission || 0), 0);
-    const totalDividend   = records.reduce((s, r) => s + (r.dividend  || 0), 0);
-
-    const tickers = ["ALL", ...Array.from(new Set(records.map(r => r.ticker)))];
-    const filteredRecords = filterTicker === "ALL" ? records : records.filter(r => r.ticker === filterTicker);
-
-    // ── Add ──
-    const setFormCb = React.useCallback((updater) => setForm(updater), []);
-    const setEditFormCb = React.useCallback((updater) => setEditForm(updater), []);
-
-    const handleAdd = () => {
-      const isDiv = form.type === "dividend";
-      if (!form.ticker) { setFormError("請填寫股票代碼"); return; }
-      if (isDiv) {
-        if (!form.dividend || +form.dividend <= 0) { setFormError("請填寫股利金額"); return; }
-      } else {
-        if (!form.shares || !form.price) { setFormError("請填寫股數與價格"); return; }
-        if (+form.shares <= 0 || +form.price <= 0) { setFormError("股數與價格須為正數"); return; }
-      }
-      const ticker = form.ticker.trim();
-      setRecords(prev => [...prev, {
-        id: Date.now(), ticker,
-        name: TICKER_NAMES[ticker] || ticker,
-        type: form.type,
-        shares:     isDiv ? 0 : +form.shares,
-        price:      isDiv ? 0 : +form.price,
-        commission: isDiv ? 0 : (form.commission ? +form.commission : 0),
-        dividend:   isDiv ? +form.dividend : 0,
-        date: form.date,
-      }]);
-      setForm(EMPTY_FORM);
-      setShowForm(false);
-      setFormError("");
-    };
-
-    // ── Delete ──
-    const handleDelete = (id) => { setRecords(prev => prev.filter(r => r.id !== id)); setConfirmDelete(null); };
-
-    // ── Edit ──
-    const openEdit = (r) => {
-      setEditingId(r.id);
-      setEditForm({
-        ticker: r.ticker, type: r.type,
-        shares: r.shares ? String(r.shares) : "",
-        price: r.price ? String(r.price) : "",
-        commission: r.commission ? String(r.commission) : "",
-        dividend: r.dividend ? String(r.dividend) : "",
-        date: r.date,
-      });
-    };
-
-    const handleEditSave = () => {
-      const isDiv = editForm.type === "dividend";
-      if (!editForm.ticker) return;
-      const ticker = editForm.ticker.trim();
-      setRecords(prev => prev.map(r => r.id === editingId ? {
-        ...r, ticker,
-        name: TICKER_NAMES[ticker] || ticker,
-        type: editForm.type,
-        shares:     isDiv ? 0 : +editForm.shares,
-        price:      isDiv ? 0 : +editForm.price,
-        commission: isDiv ? 0 : (editForm.commission ? +editForm.commission : 0),
-        dividend:   isDiv ? +editForm.dividend : 0,
-        date: editForm.date,
-      } : r));
-      setEditingId(null);
-      setEditForm(null);
-    };
-
-    const fmt = n => n.toLocaleString("zh-TW", { minimumFractionDigits:2, maximumFractionDigits:2 });
-    const fmtShares = n => n % 1 === 0 ? n.toLocaleString("zh-TW") : n.toFixed(2);
-    const fmtDate = d => { if (!d) return ""; const [y,m,day] = d.split("-"); return `${y.slice(2)}/${m}/${day}`; };
-    const isDark = theme === "dark";
-    const cv = v => `var(${v})`;
-
-    // Shared form body
-    const FormBody = React.memo(({ f, setF, cv, isDark }) => {
-      const isDiv = f.type === "dividend";
-      const inp = (label, key, placeholder, type="text", extraStyle={}) => (
-        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-          <label style={{ fontSize:"0.68rem", color:cv("--text4"), letterSpacing:"0.08em", textTransform:"uppercase" }}>{label}</label>
-          <input style={{ background:cv("--bg"), border:`1px solid ${cv("--border3")}`, borderRadius:8, padding:"10px 12px", color:cv("--text"), fontSize:"1rem", fontFamily:"inherit", ...extraStyle }}
-            type="text" inputMode={type==="number"?"decimal":"text"}
-            placeholder={placeholder} value={f[key]}
-            onChange={e => setF(p => ({...p, [key]: e.target.value}))} />
-        </div>
-      );
-      return <>
-        <div style={{ marginBottom:16 }}>
-          <label style={{ fontSize:"0.68rem", color:cv("--text4"), letterSpacing:"0.08em", textTransform:"uppercase", display:"block", marginBottom:6 }}>類型</label>
-          <div style={{ display:"flex", gap:8 }}>
-            {["buy","sell","dividend"].map(t => {
-              const cfg = TYPE_CONFIG[t]; const active = f.type === t;
-              return (
-                <button key={t} onClick={() => setF(p => ({...p, type:t}))}
-                  style={{ flex:1, padding:"10px 0", border:`1px solid ${active?(t==="buy"?cv("--green-border"):t==="sell"?cv("--red-border"):cv("--blue-border")):cv("--border3")}`, borderRadius:10, background:active?cfg.bg:"transparent", color:active?cfg.color:cv("--text3"), cursor:"pointer", fontSize:"1rem", fontFamily:"inherit", fontWeight:active?700:400 }}>
-                  {cfg.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
-          {/* 股票代碼 — 下拉選單 */}
-          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            <label style={{ fontSize:"0.68rem", color:cv("--text4"), letterSpacing:"0.08em", textTransform:"uppercase" }}>股票代碼</label>
-            <select style={{ background:cv("--bg"), border:`1px solid ${cv("--border3")}`, borderRadius:8, padding:"10px 12px", color: f.ticker ? cv("--text") : cv("--text4"), fontSize:"1rem", fontFamily:"inherit", appearance:"none", WebkitAppearance:"none" }}
-              value={f.ticker} onChange={e => setF(p => ({...p, ticker: e.target.value}))}>
-              <option value="">選擇股票...</option>
-              {Object.entries(TICKER_NAMES).map(([code, name]) => (
-                <option key={code} value={code}>{code}　{name}</option>
-              ))}
-              <option value="OTHER">✏️ 自行輸入</option>
-            </select>
-            {f.ticker === "OTHER" && (
-              <input style={{ background:cv("--bg"), border:`1px solid ${cv("--border3")}`, borderRadius:8, padding:"10px 12px", color:cv("--text"), fontSize:"1rem", fontFamily:"inherit", marginTop:6 }}
-                type="text" placeholder="輸入股票代碼"
-                onChange={e => setF(p => ({...p, ticker: e.target.value}))} />
-            )}
-          </div>
-          {!isDiv && <>
-            {inp("股數（股）", "shares", "1000", "number")}
-            {inp("成交價（元）", "price", "0.00", "number")}
-            {inp("手續費（元）", "commission", "0", "number")}
-          </>}
-          {isDiv && inp("股利金額（元）", "dividend", "0.00", "number", { borderColor:cv("--blue-border") })}
-          {inp("日期", "date", "", "date")}
-        </div>
-      </>;
-    });
-
-    return (
-      <div className={`theme-${theme}`} style={{ minHeight:"100vh", background:cv("--bg"), fontFamily:"system-ui,-apple-system,sans-serif", color:cv("--text"), fontSize:"1rem" }}>
-
-        {/* HEADER */}
-        <header className="app-header" style={{ background:cv("--bg") }}>
-          <div className="header-logo-row">
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:"1.3rem", color:cv("--gold") }}>◈</span>
-              <span style={{ fontSize:"1.05rem", letterSpacing:"0.15em", color:cv("--gold"), fontWeight:700 }}>台股誌</span>
-            </div>
-          </div>
-          <div className="header-nav-row" style={{ borderColor:cv("--border") }}>
-            <button onClick={() => setTheme(isDark?"light":"dark")}
-              style={{ background:"transparent", border:`1px solid ${cv("--border3")}`, color:cv("--text3"), borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:"1rem", marginRight:8, fontFamily:"inherit" }}>
-              {isDark?"☀️":"🌙"}
-            </button>
-            <nav style={{ display:"flex", gap:4, background:cv("--bg3"), borderRadius:10, padding:4 }}>
-              {[["home","總覽"],["records","紀錄"]].map(([p,label]) => (
-                <button key={p} onClick={() => setPage(p)}
-                  style={{ padding:"8px 22px", borderRadius:8, border:"none", background:page===p?cv("--gold"):"transparent", color:page===p?(isDark?"#0e0e12":"#fff"):cv("--text3"), cursor:"pointer", fontSize:"0.95rem", fontFamily:"inherit", fontWeight:page===p?700:400 }}>
-                  {label}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </header>
-
-        {/* DELETE CONFIRM */}
-        {confirmDelete !== null && (
-          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 24px" }}
-            onClick={() => setConfirmDelete(null)}>
-            <div style={{ background:cv("--bg2"),border:`1px solid ${cv("--border3")}`,borderRadius:20,padding:"32px 28px",width:"100%",maxWidth:340,textAlign:"center" }}
-              onClick={e => e.stopPropagation()}>
-              <p style={{ fontSize:"1rem",fontWeight:700,marginBottom:8 }}>確認刪除這筆紀錄？</p>
-              <p style={{ fontSize:"0.85rem",color:cv("--text4"),marginBottom:28 }}>此操作無法復原</p>
-              <div style={{ display:"flex",gap:10 }}>
-                <button style={{ flex:1,padding:"12px",borderRadius:10,border:`1px solid ${cv("--border3")}`,background:"transparent",color:cv("--text3"),cursor:"pointer",fontSize:"0.95rem",fontFamily:"inherit" }}
-                  onClick={() => setConfirmDelete(null)}>取消</button>
-                <button style={{ flex:1,padding:"12px",borderRadius:10,border:"none",background:"#E07B5A",color:"#fff",cursor:"pointer",fontSize:"0.95rem",fontFamily:"inherit",fontWeight:700 }}
-                  onClick={() => handleDelete(confirmDelete)}>刪除</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* EDIT MODAL */}
-        {editingId !== null && editForm && (
-          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center" }}
-            onClick={() => setEditingId(null)}>
-            <div className="fade-in" style={{ background:cv("--bg2"),border:`1px solid ${cv("--border3")}`,borderRadius:"20px 20px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:600 }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
-                <h3 style={{ fontSize:"1rem",fontWeight:700,color:cv("--gold") }}>修改紀錄</h3>
-                <button onClick={() => setEditingId(null)} style={{ background:"transparent",border:"none",color:cv("--text3"),cursor:"pointer",fontSize:"1.2rem" }}>✕</button>
-              </div>
-              <FormBody f={editForm} setF={setEditFormCb} cv={cv} isDark={isDark} />
-              <button style={{ width:"100%",background:cv("--gold"),color:isDark?"#0e0e12":"#fff",border:"none",padding:"13px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:"1rem",fontFamily:"inherit" }}
-                onClick={handleEditSave}>儲存修改</button>
-            </div>
-          </div>
-        )}
-
-        <div className="page-content">
-          <div className="header-spacer" />
-
-          {/* ══ HOME ══ */}
-          {page === "home" && (
-            <div className="fade-in">
-              <div style={{ padding:"28px 0 20px", textAlign:"center" }}>
-                <p style={{ fontSize:"0.75rem",letterSpacing:"0.14em",color:cv("--text4"),textTransform:"uppercase",marginBottom:8 }}>淨投入成本（扣除股利）</p>
-                <h1 style={{ fontSize:"clamp(2rem,8vw,3.4rem)",fontWeight:700,color:cv("--gold"),margin:"0 0 8px",letterSpacing:"-0.01em" }}>
-                  NT${fmt(totalCost)}
-                </h1>
-                <p style={{ color:cv("--text4"),fontSize:"0.85rem",lineHeight:1.8 }}>
-                  {portfolio.length} 支持倉 ・ 手續費 NT${fmt(totalCommission)}
-                  {totalDividend > 0 && <> ・ 已收股利 <span style={{ color:cv("--blue") }}>NT${fmt(totalDividend)}</span></>}
-                </p>
-              </div>
-
-              {portfolio.length > 0 && <>
-                <div style={{ display:"flex",height:6,borderRadius:4,overflow:"hidden",marginBottom:12,gap:2 }}>
-                  {portfolio.map((p,i) => (
-                    <div key={p.ticker} style={{ height:"100%",borderRadius:2,width:`${(p.cost/totalCost)*100}%`,background:COLORS[i%COLORS.length] }} />
-                  ))}
-                </div>
-                <div style={{ display:"flex",flexWrap:"wrap",gap:"6px 16px",marginBottom:28,justifyContent:"center" }}>
-                  {portfolio.map((p,i) => (
-                    <div key={p.ticker} style={{ display:"flex",alignItems:"center",gap:6 }}>
-                      <span style={{ width:8,height:8,borderRadius:"50%",background:COLORS[i%COLORS.length],flexShrink:0,display:"inline-block" }} />
-                      <span style={{ fontSize:"0.78rem",color:cv("--text3") }}>{p.ticker} {p.name}</span>
-                      <span style={{ fontSize:"0.78rem",color:cv("--text4") }}>{((p.cost/totalCost)*100).toFixed(1)}%</span>
-                    </div>
-                  ))}
-                </div>
-              </>}
-
-              <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12 }}>
-                {portfolio.map((p,i) => {
-                  const pct = totalCost > 0 ? (p.cost/totalCost)*100 : 0;
-                  return (
-                    <div key={p.ticker} className="card-hover"
-                      style={{ background:cv("--bg2"),border:`1px solid ${cv("--border")}`,borderRadius:16,padding:"18px 20px",transition:"all 0.2s" }}>
-                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4 }}>
-                        <div>
-                          <div style={{ fontSize:"0.85rem",fontWeight:700,letterSpacing:"0.06em",padding:"4px 12px",borderRadius:8,border:`1px solid ${COLORS[i%COLORS.length]}55`,background:COLORS[i%COLORS.length]+"22",color:COLORS[i%COLORS.length],display:"inline-block" }}>
-                            {p.ticker}
-                          </div>
-                        </div>
-                        <div style={{ display:"flex",flexDirection:"column",alignItems:"flex-end",gap:1 }}>
-                          <span style={{ fontSize:"1.6rem",fontWeight:700,lineHeight:1,color:COLORS[i%COLORS.length] }}>{pct.toFixed(1)}%</span>
-                          <span style={{ fontSize:"0.65rem",color:cv("--text4") }}>佔全數投資</span>
-                        </div>
-                      </div>
-                      <p style={{ fontSize:"0.78rem",color:cv("--text4"),marginBottom:14,marginTop:4 }}>{p.name}</p>
-                      <div style={{ display:"flex",gap:10,marginBottom:8 }}>
-                        {[
-                          ["持有股數", fmtShares(p.shares)+"股"],
-                          ["均價", `NT$${fmt(p.cost/p.shares)}`],
-                          ["淨成本", `NT$${fmt(p.cost)}`],
-                        ].map(([l,v]) => (
-                          <div key={l} style={{ flex:1 }}>
-                            <span style={{ display:"block",fontSize:"0.65rem",color:cv("--text4"),marginBottom:3,letterSpacing:"0.04em" }}>{l}</span>
-                            <span style={{ fontSize:"0.85rem",color:cv("--text2"),fontWeight:600 }}>{v}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ display:"flex",gap:12,marginBottom:10 }}>
-                        {p.commission > 0 && <span style={{ fontSize:"0.72rem",color:cv("--text4") }}>手續費 NT${fmt(p.commission)}</span>}
-                        {p.dividend > 0 && <span style={{ fontSize:"0.72rem",color:cv("--blue") }}>已收股利 NT${fmt(p.dividend)}</span>}
-                      </div>
-                      <div style={{ height:3,background:cv("--border"),borderRadius:2 }}>
-                        <div style={{ height:"100%",borderRadius:2,width:`${pct}%`,background:COLORS[i%COLORS.length] }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {portfolio.length === 0 && (
-                <div style={{ textAlign:"center",padding:"64px 0",color:cv("--text4") }}>
-                  <span style={{ display:"block",fontSize:"2.5rem",marginBottom:14,color:cv("--border") }}>◎</span>
-                  <p style={{ marginBottom:20,fontSize:"1rem" }}>尚無持倉，前往紀錄頁新增交易</p>
-                  <button style={{ background:"transparent",border:`1px solid ${cv("--gold")}`,color:cv("--gold"),padding:"10px 24px",borderRadius:8,cursor:"pointer",fontSize:"1rem",fontFamily:"inherit" }}
-                    onClick={() => setPage("records")}>前往紀錄頁 →</button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ══ RECORDS ══ */}
-          {page === "records" && (
-            <div className="fade-in">
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"24px 0 18px" }}>
-                <div>
-                  <h2 style={{ fontSize:"1.3rem",fontWeight:700,margin:"0 0 4px" }}>交易紀錄</h2>
-                  <p style={{ color:cv("--text4"),fontSize:"0.82rem" }}>共 {records.length} 筆</p>
-                </div>
-                <button style={{ background:cv("--gold"),color:isDark?"#0e0e12":"#fff",border:"none",padding:"10px 20px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:"1rem",fontFamily:"inherit",flexShrink:0 }}
-                  onClick={() => { setShowForm(!showForm); setFormError(""); }}>
-                  {showForm?"✕ 取消":"+ 新增"}
-                </button>
-              </div>
-
-              {showForm && (
-                <div className="fade-in" style={{ background:cv("--bg2"),border:`1px solid ${cv("--border")}`,borderRadius:16,padding:"22px",marginBottom:18 }}>
-                  <h3 style={{ fontSize:"0.95rem",color:cv("--gold"),marginBottom:16 }}>新增紀錄</h3>
-                  <FormBody f={form} setF={setFormCb} cv={cv} isDark={isDark} />
-                  {formError && <p style={{ color:"#E07B5A",fontSize:"0.88rem",marginBottom:12 }}>{formError}</p>}
-                  <button style={{ background:cv("--gold"),color:isDark?"#0e0e12":"#fff",border:"none",padding:"12px 26px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:"1rem",fontFamily:"inherit" }}
-                    onClick={handleAdd}>確認新增</button>
-                </div>
-              )}
-
-              <div style={{ display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" }}>
-                {tickers.map(t => (
-                  <button key={t} onClick={() => setFilterTicker(t)}
-                    style={{ padding:"6px 14px",borderRadius:8,border:`1px solid ${filterTicker===t?cv("--gold")+"44":cv("--border")}`,background:filterTicker===t?cv("--gold-bg"):"transparent",color:filterTicker===t?cv("--gold"):cv("--text4"),cursor:"pointer",fontSize:"0.9rem",fontFamily:"inherit" }}>
-                    {t === "ALL" ? "全部" : `${t} ${TICKER_NAMES[t]||""}`}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ background:cv("--bg2"),border:`1px solid ${cv("--border")}`,borderRadius:16,overflow:"hidden" }}>
-                {filteredRecords.length === 0 && (
-                  <div style={{ textAlign:"center",padding:"40px 0",color:cv("--text4"),fontSize:"0.95rem" }}>無紀錄</div>
-                )}
-                {[...filteredRecords].reverse().map(r => {
-                  const cfg = TYPE_CONFIG[r.type] || TYPE_CONFIG.buy;
-                  const isDiv = r.type === "dividend";
-                  return (
-                    <div key={r.id} className="record-card" style={{ borderColor:cv("--border2") }}>
-                      <div className="record-top">
-                        <div className="record-ticker-wrap">
-                          <span style={{ fontWeight:700,color:cv("--gold"),fontSize:"1rem" }}>{r.ticker}</span>
-                          <span style={{ fontSize:"0.72rem",color:cv("--text4") }}>{r.name}</span>
-                          <span style={{ fontSize:"0.75rem",padding:"3px 9px",borderRadius:20,fontWeight:600,background:cfg.bg,color:cfg.color }}>{cfg.label}</span>
-                        </div>
-                        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                          {isDiv
-                            ? <span style={{ fontSize:"1.05rem",fontWeight:700,color:cv("--blue") }}>NT${fmt(r.dividend)}</span>
-                            : <span style={{ fontSize:"1.05rem",fontWeight:700,color:cv("--text") }}>NT${fmt(r.shares*r.price)}</span>
-                          }
-                          <button onClick={() => openEdit(r)}
-                            style={{ background:"transparent",border:`1px solid ${cv("--border3")}`,color:cv("--text3"),cursor:"pointer",fontSize:"0.78rem",padding:"4px 10px",borderRadius:6,fontFamily:"inherit" }}>
-                            修改
-                          </button>
-                          <button onClick={() => setConfirmDelete(r.id)}
-                            style={{ background:"transparent",border:"none",color:cv("--text5"),cursor:"pointer",fontSize:"0.85rem",padding:"4px 6px",borderRadius:4,fontFamily:"inherit" }}>✕</button>
-                        </div>
-                      </div>
-
-                      {isDiv ? (
-                        <div className="record-meta-div">
-                          {[["股利金額",`NT$${fmt(r.dividend)}`],["日期",fmtDate(r.date)]].map(([l,v]) => (
-                            <div key={l} className="record-meta-item">
-                              <span style={{ fontSize:"0.68rem",color:cv("--text4") }}>{l}</span>
-                              <span style={{ fontSize:"0.88rem",color:cv("--text2"),fontWeight:500 }}>{v}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="record-meta">
-                          {[["股數",fmtShares(r.shares)+"股"],["成交價",`NT$${fmt(r.price)}`],["手續費",`NT$${fmt(r.commission||0)}`],["日期",fmtDate(r.date)]].map(([l,v]) => (
-                            <div key={l} className="record-meta-item">
-                              <span style={{ fontSize:"0.68rem",color:cv("--text4") }}>{l}</span>
-                              <span style={{ fontSize:"0.88rem",color:cv("--text2"),fontWeight:500 }}>{v}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a23;
+    --card: #1e2433;
+    --border: #2a3048;
+    --accent: #e8b84b;
+    --accent2: #4b9de8;
+    --danger: #e84b4b;
+    --green: #4be8a0;
+    --text: #eef0f7;
+    --muted: #6b7494;
+    --radius: 14px;
   }
 
-  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-</script>
-</body>
-</html>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+  }
+
+  .app {
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Header */
+  .header {
+    padding: 20px 20px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+  .header-sub { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  /* Nav */
+  .nav {
+    display: flex;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+    z-index: 100;
+  }
+  .nav-btn {
+    flex: 1;
+    padding: 12px 4px 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    transition: color 0.2s;
+  }
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn svg { width: 22px; height: 22px; }
+
+  /* Content */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 16px 90px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .card-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .card-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .card-unit { font-size: 13px; color: var(--muted); margin-left: 4px; }
+
+  /* Home Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; }
+  .stat-unit { font-size: 11px; color: var(--muted); }
+
+  /* Vehicle Banner */
+  .vehicle-banner {
+    background: linear-gradient(135deg, #1a2035 0%, #0f1520 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .vehicle-banner::before {
+    content: '';
+    position: absolute;
+    right: -20px; top: -20px;
+    width: 130px; height: 130px;
+    background: radial-gradient(circle, rgba(232,184,75,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .vehicle-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .vehicle-plate {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .vehicle-edit-btn {
+    position: absolute; right: 16px; top: 16px;
+    background: rgba(232,184,75,0.1);
+    border: 1px solid rgba(232,184,75,0.3);
+    color: var(--accent);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  /* Section Title */
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin: 20px 0 10px;
+    text-transform: uppercase;
+  }
+
+  /* Records List */
+  .record-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .record-item:hover { border-color: var(--accent); }
+  .record-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 18px;
+  }
+  .record-icon.fuel { background: rgba(232,184,75,0.12); }
+  .record-icon.maint { background: rgba(75,157,232,0.12); }
+  .record-body { flex: 1; min-width: 0; }
+  .record-title { font-weight: 600; font-size: 14px; color: var(--text); }
+  .record-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .record-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .record-amount.blue { color: var(--accent2); }
+
+  /* FAB */
+  .fab {
+    position: fixed;
+    bottom: 80px;
+    right: calc(50% - 215px + 16px);
+    width: 52px; height: 52px;
+    background: var(--accent);
+    color: #0d0f14;
+    border: none;
+    border-radius: 50%;
+    font-size: 26px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 20px rgba(232,184,75,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+    z-index: 99;
+  }
+  .fab:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(232,184,75,0.55); }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 200;
+    display: flex; align-items: flex-end; justify-content: center;
+    animation: fadeIn 0.2s;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    width: 100%; max-width: 430px;
+    padding: 24px 20px 40px;
+    border-top: 1px solid var(--border);
+    animation: slideUp 0.25s cubic-bezier(0.32,0.72,0,1);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-handle {
+    width: 36px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .modal-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    margin-bottom: 20px;
+  }
+
+  /* Form */
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; display: block; }
+  .form-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .form-input[type="date"] { appearance: none; -webkit-appearance: none; width: 100%; box-sizing: border-box; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Buttons */
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: #0d0f14;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    margin-top: 6px;
+    transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-cancel {
+    width: 100%;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    margin-top: 8px;
+  }
+
+  /* Settings */
+  .settings-section { margin-bottom: 24px; }
+  .settings-section-title {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    padding: 0 4px;
+  }
+  .settings-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+  }
+  .settings-item-label { font-size: 14px; }
+  .settings-item-value { font-size: 13px; color: var(--muted); }
+
+  /* Toggle */
+  .toggle {
+    width: 44px; height: 24px;
+    background: var(--border);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: none;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* Pill badges */
+  .pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 99px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .pill.green { background: rgba(75,232,160,0.15); color: var(--green); }
+  .pill.yellow { background: rgba(232,184,75,0.15); color: var(--accent); }
+  .pill.blue { background: rgba(75,157,232,0.15); color: var(--accent2); }
+
+  /* Efficiency meter */
+  .eff-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+  .eff-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent2), var(--green));
+    transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 20px;
+    font-size: 14px;
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+  .delete-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: color 0.15s;
+    font-size: 16px;
+  }
+  .delete-btn:hover { color: var(--danger); }
+
+  select.form-input option { background: var(--card); }
+`;
+
+// ─── Icons ─────────────────────────────────────────────────────────────────
+const icons = {
+  home: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12L12 3l9 9"/><path d="M9 21V12h6v9"/><path d="M3 12v9h18V12"/></svg>,
+  fuel: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 22V6a2 2 0 012-2h8a2 2 0 012 2v4"/><path d="M15 10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2"/><path d="M7 8h4"/><path d="M7 12h4"/><line x1="7" y1="16" x2="7" y2="16"/></svg>,
+  wrench: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.77 3.77z"/></svg>,
+  settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
+};
+
+// ─── Sample Data ────────────────────────────────────────────────────────────
+const initFuel = [
+  { id: 1, date: "2025-05-10", station: "中油", liters: 40.2, price: 31.5, total: 1266, odometer: 45820, note: "" },
+  { id: 2, date: "2025-04-22", station: "台塑", liters: 38.7, price: 31.5, total: 1219, odometer: 45340, note: "高速公路補油" },
+  { id: 3, date: "2025-04-05", station: "中油", liters: 42.1, price: 30.8, total: 1297, odometer: 44860, note: "" },
+];
+const initMaint = [
+  { id: 1, date: "2025-05-01", type: "機油更換", shop: "原廠保養", cost: 2800, odometer: 45600, note: "0W-20全合成" },
+  { id: 2, date: "2025-02-15", type: "輪胎旋轉", shop: "米其林輪胎店", cost: 600, odometer: 43200, note: "" },
+  { id: 3, date: "2024-11-20", type: "煞車皮更換", shop: "路邊修車廠", cost: 5500, odometer: 40000, note: "前後輪" },
+];
+
+// ─── Main App ───────────────────────────────────────────────────────────────
+export default function App() {
+  const [tab, setTab] = useState("home");
+  const [fuel, setFuel] = useState(initFuel);
+  const [maint, setMaint] = useState(initMaint);
+  const [vehicle, setVehicle] = useState({ name: "Toyota Corolla", plate: "ABC-1234", year: "2020" });
+  const [modal, setModal] = useState(null); // 'fuel' | 'maint' | 'vehicle'
+  const [settings, setSettings] = useState({ unit: "km/L", currency: "TWD", reminder: true, darkMode: true });
+
+  // Calculate stats
+  const totalFuelCost = fuel.reduce((s, r) => s + r.total, 0);
+  const totalMaintCost = maint.reduce((s, r) => s + r.cost, 0);
+  const totalCost = totalFuelCost + totalMaintCost;
+  const avgEfficiency = fuel.length >= 2
+    ? (() => {
+        const sorted = [...fuel].sort((a, b) => a.odometer - b.odometer);
+        const dist = sorted[sorted.length - 1].odometer - sorted[0].odometer;
+        const liters = sorted.slice(1).reduce((s, r) => s + r.liters, 0);
+        return liters > 0 ? (dist / liters).toFixed(1) : "-";
+      })()
+    : "-";
+
+  const tabs = [
+    { id: "home", label: "主頁", icon: icons.home },
+    { id: "fuel", label: "油耗", icon: icons.fuel },
+    { id: "maint", label: "保養", icon: icons.wrench },
+    { id: "settings", label: "設定", icon: icons.settings },
+  ];
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="app">
+        <Header tab={tab} />
+        <div className="content">
+          {tab === "home" && <HomeTab fuel={fuel} maint={maint} vehicle={vehicle} avgEff={avgEfficiency} totalCost={totalCost} totalFuelCost={totalFuelCost} totalMaintCost={totalMaintCost} onEditVehicle={() => setModal("vehicle")} />}
+          {tab === "fuel" && <FuelTab fuel={fuel} setFuel={setFuel} />}
+          {tab === "maint" && <MaintTab maint={maint} setMaint={setMaint} />}
+          {tab === "settings" && <SettingsTab settings={settings} setSettings={setSettings} vehicle={vehicle} setVehicle={setVehicle} />}
+        </div>
+
+        {(tab === "fuel" || tab === "maint") && (
+          <button className="fab" onClick={() => setModal(tab)}>＋</button>
+        )}
+
+        <nav className="nav">
+          {tabs.map(t => (
+            <button key={t.id} className={`nav-btn ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </nav>
+
+        {modal === "fuel" && <FuelModal initial={null} onClose={() => setModal(null)} onSave={r => { setFuel(p => [r, ...p]); setModal(null); }} />}
+        {modal === "maint" && <MaintModal initial={null} onClose={() => setModal(null)} onSave={r => { setMaint(p => [r, ...p]); setModal(null); }} />}
+        {modal === "vehicle" && <VehicleModal vehicle={vehicle} onClose={() => setModal(null)} onSave={v => { setVehicle(v); setModal(null); }} />}
+      </div>
+    </>
+  );
+}
+
+// ─── Header ─────────────────────────────────────────────────────────────────
+function Header({ tab }) {
+  const titles = { home: "CarLog", fuel: "油耗紀錄", maint: "保養紀錄", settings: "設定" };
+  const subs = { home: "Vehicle Tracker", fuel: "Fuel Tracker", maint: "Maintenance", settings: "Preferences" };
+  return (
+    <div className="header">
+      <div>
+        <div className="header-title">{titles[tab]}</div>
+        <div className="header-sub">{subs[tab]}</div>
+      </div>
+      <div style={{ fontSize: 28 }}>🚗</div>
+    </div>
+  );
+}
+
+// ─── Home Tab ───────────────────────────────────────────────────────────────
+function HomeTab({ fuel, maint, vehicle, avgEff, totalCost, totalFuelCost, totalMaintCost, onEditVehicle }) {
+  const lastFuel = fuel.slice().sort((a,b) => a.odometer - b.odometer).slice(-1)[0];
+  const effPct = avgEff !== "-" ? Math.min(100, (parseFloat(avgEff) / 20) * 100) : 0;
+
+  return (
+    <>
+      {/* Vehicle */}
+      <div className="vehicle-banner">
+        <div className="vehicle-name">{vehicle.name}</div>
+        <div className="vehicle-plate">🪪 {vehicle.plate} · {vehicle.year}</div>
+        <button className="vehicle-edit-btn" onClick={onEditVehicle}>編輯</button>
+      </div>
+
+      {/* Oil Efficiency */}
+      <div className="card">
+        <div className="card-label">平均油耗</div>
+        <div className="card-value">{avgEff}<span className="card-unit">km/L</span></div>
+        <div className="eff-bar"><div className="eff-fill" style={{ width: `${effPct}%` }} /></div>
+        {lastFuel && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>上次加油：{lastFuel.date}・{lastFuel.liters}L</div>}
+      </div>
+
+      {/* Stats Grid */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-label">油費支出</div>
+          <div className="stat-value" style={{ color: "var(--accent)" }}>
+            ${totalFuelCost.toLocaleString()}<span className="stat-unit"> 元</span>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">保養支出</div>
+          <div className="stat-value" style={{ color: "var(--accent2)" }}>
+            ${totalMaintCost.toLocaleString()}<span className="stat-unit"> 元</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Total Cost */}
+      <div className="card" style={{ background: "linear-gradient(135deg,#1a2035,#0f1520)", borderColor: "rgba(232,184,75,0.25)" }}>
+        <div className="card-label">養車總費用</div>
+        <div className="card-value" style={{ fontSize: 36, color: "var(--accent)" }}>
+          ${totalCost.toLocaleString()}<span className="card-unit">元</span>
+        </div>
+        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>共 {fuel.length} 次加油・{maint.length} 次保養</div>
+      </div>
+    </>
+  );
+}
+
+// ─── Fuel Tab ───────────────────────────────────────────────────────────────
+function FuelTab({ fuel, setFuel }) {
+  const [editing, setEditing] = useState(null);
+  const sorted = [...fuel].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const handleUpdate = (updated) => {
+    setFuel(p => p.map(r => r.id === updated.id ? updated : r));
+    setEditing(null);
+  };
+  return (
+    <>
+      <div className="section-title">加油紀錄</div>
+      {sorted.length === 0 && <div className="empty-state"><div className="empty-icon">⛽</div>尚無加油紀錄<br/>點擊右下角 ＋ 新增</div>}
+      {sorted.map((r, i) => {
+        const prev = sorted[i + 1];
+        const eff = prev ? ((r.odometer - prev.odometer) / r.liters).toFixed(1) : null;
+        return (
+          <div key={r.id} className="record-item" style={{ flexWrap: "wrap", gap: 10 }} onClick={() => setEditing(r)}>
+            <div className="record-icon fuel">⛽</div>
+            <div className="record-body">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div className="record-title">{r.station}</div>
+                {eff && <span className="pill green">{eff} km/L</span>}
+              </div>
+              <div className="record-meta">{r.date}・{r.liters}L・{r.price}元/L・里程 {r.odometer.toLocaleString()}km</div>
+              {r.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{r.note}</div>}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={e => e.stopPropagation()}>
+              <div className="record-amount">${r.total.toLocaleString()}</div>
+              <button className="delete-btn" onClick={() => setFuel(p => p.filter(x => x.id !== r.id))}>✕</button>
+            </div>
+          </div>
+        );
+      })}
+      {editing && (
+        <FuelModal
+          initial={editing}
+          onClose={() => setEditing(null)}
+          onSave={handleUpdate}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Maint Tab ──────────────────────────────────────────────────────────────
+function MaintTab({ maint, setMaint }) {
+  const [editing, setEditing] = useState(null);
+  const sorted = [...maint].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const typeColors = { "機油更換": "yellow", "輪胎旋轉": "blue", "煞車皮更換": "green" };
+  const handleUpdate = (updated) => {
+    setMaint(p => p.map(r => r.id === updated.id ? updated : r));
+    setEditing(null);
+  };
+  return (
+    <>
+      <div className="section-title">保養紀錄</div>
+      {sorted.length === 0 && <div className="empty-state"><div className="empty-icon">🔧</div>尚無保養紀錄<br/>點擊右下角 ＋ 新增</div>}
+      {sorted.map(r => (
+        <div key={r.id} className="record-item" onClick={() => setEditing(r)}>
+          <div className="record-icon maint">🔧</div>
+          <div className="record-body">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="record-title">{r.type}</div>
+              <span className={`pill ${typeColors[r.type] || "blue"}`}>{r.type.includes("油") ? "耗材" : "服務"}</span>
+            </div>
+            <div className="record-meta">{r.date}・{r.shop}・里程 {r.odometer.toLocaleString()}km</div>
+            {r.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{r.note}</div>}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={e => e.stopPropagation()}>
+            <div className="record-amount blue">${r.cost.toLocaleString()}</div>
+            <button className="delete-btn" onClick={() => setMaint(p => p.filter(x => x.id !== r.id))}>✕</button>
+          </div>
+        </div>
+      ))}
+      {editing && (
+        <MaintModal
+          initial={editing}
+          onClose={() => setEditing(null)}
+          onSave={handleUpdate}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Settings Tab ───────────────────────────────────────────────────────────
+function SettingsTab({ settings, setSettings, vehicle, setVehicle }) {
+  const tog = key => setSettings(s => ({ ...s, [key]: !s[key] }));
+  return (
+    <>
+      <div className="settings-section">
+        <div className="settings-section-title">車輛資訊</div>
+        <div className="card" style={{ padding: "14px 16px" }}>
+          <div style={{ marginBottom: 12 }}>
+            <div className="form-label">車名</div>
+            <input className="form-input" value={vehicle.name} onChange={e => setVehicle(v => ({ ...v, name: e.target.value }))} />
+          </div>
+          <div className="form-row">
+            <div>
+              <div className="form-label">車牌</div>
+              <input className="form-input" value={vehicle.plate} onChange={e => setVehicle(v => ({ ...v, plate: e.target.value }))} />
+            </div>
+            <div>
+              <div className="form-label">年份</div>
+              <input className="form-input" value={vehicle.year} onChange={e => setVehicle(v => ({ ...v, year: e.target.value }))} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">偏好設定</div>
+        <div className="settings-item" onClick={() => setSettings(s => ({ ...s, unit: s.unit === "km/L" ? "L/100km" : "km/L" }))}>
+          <span className="settings-item-label">油耗單位</span>
+          <span className="settings-item-value">{settings.unit} ▸</span>
+        </div>
+        <div className="settings-item" onClick={() => setSettings(s => ({ ...s, currency: s.currency === "TWD" ? "USD" : "TWD" }))}>
+          <span className="settings-item-label">幣別</span>
+          <span className="settings-item-value">{settings.currency} ▸</span>
+        </div>
+        <div className="settings-item">
+          <span className="settings-item-label">保養提醒</span>
+          <button className={`toggle ${settings.reminder ? "on" : ""}`} onClick={() => tog("reminder")} />
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">關於</div>
+        <div className="settings-item">
+          <span className="settings-item-label">版本</span>
+          <span className="settings-item-value">1.0.0</span>
+        </div>
+        <div className="settings-item">
+          <span className="settings-item-label">開發者</span>
+          <span className="settings-item-value">CarLog Studio</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Modals ─────────────────────────────────────────────────────────────────
+function FuelModal({ initial, onClose, onSave }) {
+  const isEdit = !!initial;
+  const blank = { date: new Date().toISOString().slice(0, 10), station: "中油", liters: "", price: "31.5", odometer: "", note: "" };
+  const [form, setForm] = useState(isEdit
+    ? { ...initial, liters: String(initial.liters), price: String(initial.price), odometer: String(initial.odometer) }
+    : blank
+  );
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const total = Math.round((parseFloat(form.liters) || 0) * (parseFloat(form.price) || 0));
+  const handleSave = () => {
+    if (!form.liters || !form.odometer) return alert("請填寫公升數和里程");
+    const record = { ...(isEdit ? initial : { id: Date.now() }), ...form, liters: parseFloat(form.liters), price: parseFloat(form.price), total, odometer: parseInt(form.odometer) };
+    onSave(record);
+  };
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-handle" />
+        <div className="modal-title">{isEdit ? "編輯加油紀錄" : "新增加油紀錄"}</div>
+        <div className="form-group">
+          <label className="form-label">日期</label>
+          <input className="form-input" type="date" value={form.date} onChange={e => set("date", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">加油站</label>
+          <select className="form-input" value={form.station} onChange={e => set("station", e.target.value)}>
+            <option>中油</option><option>台塑</option><option>全國</option><option>其他</option>
+          </select>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">公升數 (L)</label>
+            <input className="form-input" type="number" placeholder="0.0" value={form.liters} onChange={e => set("liters", e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">油價 (元/L)</label>
+            <input className="form-input" type="number" placeholder="0.0" value={form.price} onChange={e => set("price", e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">當前里程 (km)</label>
+          <input className="form-input" type="number" placeholder="45000" value={form.odometer} onChange={e => set("odometer", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">備註</label>
+          <input className="form-input" placeholder="選填" value={form.note} onChange={e => set("note", e.target.value)} />
+        </div>
+        {total > 0 && <div style={{ textAlign: "center", color: "var(--accent)", fontFamily: "JetBrains Mono, monospace", fontSize: 22, marginBottom: 8 }}>
+          本次費用：${total.toLocaleString()} 元
+        </div>}
+        <button className="btn-primary" onClick={handleSave}>{isEdit ? "儲存修改" : "儲存紀錄"}</button>
+        <button className="btn-cancel" onClick={onClose}>取消</button>
+      </div>
+    </div>
+  );
+}
+
+function MaintModal({ initial, onClose, onSave }) {
+  const isEdit = !!initial;
+  const blank = { date: new Date().toISOString().slice(0, 10), type: "機油更換", shop: "", cost: "", odometer: "", note: "" };
+  const [form, setForm] = useState(isEdit
+    ? { ...initial, cost: String(initial.cost), odometer: String(initial.odometer) }
+    : blank
+  );
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const handleSave = () => {
+    if (!form.cost || !form.shop) return alert("請填寫費用和維修廠");
+    const record = { ...(isEdit ? initial : { id: Date.now() }), ...form, cost: parseInt(form.cost), odometer: parseInt(form.odometer) || 0 };
+    onSave(record);
+  };
+  const types = ["機油更換", "輪胎旋轉", "輪胎更換", "煞車皮更換", "空氣濾清器", "火星塞", "冷卻液", "定期保養", "其他"];
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-handle" />
+        <div className="modal-title">{isEdit ? "編輯保養紀錄" : "新增保養紀錄"}</div>
+        <div className="form-group">
+          <label className="form-label">日期</label>
+          <input className="form-input" type="date" value={form.date} onChange={e => set("date", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">保養項目</label>
+          <select className="form-input" value={form.type} onChange={e => set("type", e.target.value)}>
+            {types.map(t => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">維修廠名稱</label>
+          <input className="form-input" placeholder="例：原廠保養" value={form.shop} onChange={e => set("shop", e.target.value)} />
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">費用 (元)</label>
+            <input className="form-input" type="number" placeholder="0" value={form.cost} onChange={e => set("cost", e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">當前里程 (km)</label>
+            <input className="form-input" type="number" placeholder="45000" value={form.odometer} onChange={e => set("odometer", e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">備註 / 耗材詳情</label>
+          <input className="form-input" placeholder="選填" value={form.note} onChange={e => set("note", e.target.value)} />
+        </div>
+        <button className="btn-primary" onClick={handleSave}>{isEdit ? "儲存修改" : "儲存紀錄"}</button>
+        <button className="btn-cancel" onClick={onClose}>取消</button>
+      </div>
+    </div>
+  );
+}
+
+function VehicleModal({ vehicle, onClose, onSave }) {
+  const [form, setForm] = useState({ ...vehicle });
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-handle" />
+        <div className="modal-title">編輯車輛資訊</div>
+        <div className="form-group">
+          <label className="form-label">車名</label>
+          <input className="form-input" value={form.name} onChange={e => set("name", e.target.value)} />
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">車牌</label>
+            <input className="form-input" value={form.plate} onChange={e => set("plate", e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">年份</label>
+            <input className="form-input" value={form.year} onChange={e => set("year", e.target.value)} />
+          </div>
+        </div>
+        <button className="btn-primary" onClick={() => onSave(form)}>儲存</button>
+        <button className="btn-cancel" onClick={onClose}>取消</button>
+      </div>
+    </div>
+  );
+}
