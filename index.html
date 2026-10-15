@@ -1,851 +1,722 @@
-import { useState, useEffect } from "react";
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="EQUITI"/>
+<meta name="theme-color" content="#0e0e12"/>
+<title>EQUITI</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#0e0e12;-webkit-tap-highlight-color:transparent;font-size:max(16px,1rem);font-family:system-ui,-apple-system,sans-serif}
+input:focus,button:focus{outline:none}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
 
-// ─── Palette & Theme ───────────────────────────────────────────────────────
-const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+/* Theme */
+.dark{--bg:#0e0e12;--bg2:#13131a;--bg3:#16161e;--border:#1e1e28;--border2:#1a1a22;--border3:#2a2a3a;--text:#e8e8f0;--text2:#c8c8d0;--text3:#888;--text4:#555;--text5:#333;--gold:#C8A96E;--gold-bg:#C8A96E18;--green:#6BAF8A;--green-bg:#1a2e20;--green-border:#2d5a38;--red:#E07B5A;--red-bg:#2e1a1a;--red-border:#5a2d2d;--blue:#7EB8A4;--blue-bg:#1a2e2a;--blue-border:#2d5a50}
+.light{--bg:#f5f5f0;--bg2:#fff;--bg3:#efefea;--border:#e0e0d8;--border2:#e8e8e0;--border3:#d0d0c8;--text:#1a1a20;--text2:#3a3a40;--text3:#666;--text4:#888;--text5:#aaa;--gold:#a07830;--gold-bg:#a0783018;--green:#2d7a50;--green-bg:#e0f2e8;--green-border:#a0d4b8;--red:#c05030;--red-bg:#fae8e0;--red-border:#e8b8a0;--blue:#2d7a6a;--blue-bg:#e0f2ee;--blue-border:#a0d4c8}
 
-  :root {
-    --bg: #0d0f14;
-    --surface: #161a23;
-    --card: #1e2433;
-    --border: #2a3048;
-    --accent: #e8b84b;
-    --accent2: #4b9de8;
-    --danger: #e84b4b;
-    --green: #4be8a0;
-    --text: #eef0f7;
-    --muted: #6b7494;
-    --radius: 14px;
-  }
+body{background:var(--bg);color:var(--text);transition:background .2s,color .2s;position:fixed;width:100%;overflow:hidden;overscroll-behavior:none}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+/* Layout */
+#app{display:flex;flex-direction:column;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg)}
+#header{flex-shrink:0;background:var(--bg);display:flex;justify-content:space-between;align-items:center;padding:0 16px 10px;padding-top:env(safe-area-inset-top,54px);border-bottom:1px solid var(--border)}
+#summary{flex-shrink:0;background:var(--bg);padding:10px 16px;border-bottom:1px solid var(--border)}
+#cards-area{flex:1;display:flex;flex-direction:column;gap:10px;padding:10px 16px;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0}
+#records-area{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:0 16px;padding-bottom:40px;min-height:0}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    min-height: 100vh;
-  }
+/* Summary grid */
+.sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:860px;margin:0 auto}
+.sum-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+.sum-label{font-size:.62rem;color:var(--text4);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.sum-val{font-size:1.1rem;font-weight:700;line-height:1}
+.sum-sub{font-size:.65rem;margin-top:3px}
 
-  .app {
-    max-width: 430px;
-    margin: 0 auto;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
-    position: relative;
-    overflow: hidden;
-  }
+/* Cards */
+.card-grid{display:flex;flex-direction:column;gap:10px;height:100%}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px 18px;flex:1 1 0;min-height:0;display:flex;flex-direction:column;justify-content:space-between}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+.ticker-badge{font-size:.85rem;font-weight:700;padding:4px 12px;border-radius:8px;border:1px solid}
+.pct-block{text-align:right}
+.pct-big{font-size:1.4rem;font-weight:700;line-height:1;display:block}
+.pct-small{font-size:.65rem;color:var(--text4)}
+.company{font-size:.75rem;color:var(--text4);margin-bottom:8px}
+.price-box{border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;min-height:60px;background:var(--bg3)}
+.price-label{font-size:.62rem;color:var(--text4);display:block;margin-bottom:3px}
+.price-val{font-size:1.3rem;font-weight:700}
+.pnl-val{font-size:1.15rem;font-weight:700;display:block}
+.pnl-pct{font-size:.75rem}
+.stats-row{display:flex;gap:10px;margin-bottom:4px}
+.stat-item{flex:1}
+.stat-label{display:block;font-size:.62rem;color:var(--text4);margin-bottom:3px}
+.stat-val{font-size:.85rem;color:var(--text2);font-weight:600}
+.edit-price-row{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+.card-footer{display:flex;justify-content:space-between;align-items:center}
 
-  /* Header */
-  .header {
-    padding: 20px 20px 12px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .header-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 24px;
-    letter-spacing: 2px;
-    color: var(--accent);
-  }
-  .header-sub { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+/* Records */
+.rec-header{display:flex;justify-content:space-between;align-items:flex-start;padding:24px 0 18px;max-width:860px;margin:0 auto}
+.rec-list{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;max-width:860px;margin:0 auto}
+.rec-item{padding:14px 16px;border-bottom:1px solid var(--border2);display:flex;flex-direction:column;gap:10px}
+.rec-item:last-child{border-bottom:none}
+.rec-top{display:flex;align-items:center;justify-content:space-between}
+.rec-left{display:flex;align-items:center;gap:10px}
+.rec-right{display:flex;align-items:center;gap:8px}
+.rec-ticker{font-weight:700;color:var(--gold);font-size:1rem}
+.pill{font-size:.75rem;padding:3px 9px;border-radius:20px;font-weight:600}
+.rec-amount{font-size:1.05rem;font-weight:700}
+.rec-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.rec-meta-div{display:grid;grid-template-columns:repeat(2,1fr);gap:4px}
+.meta-item{display:flex;flex-direction:column;gap:3px}
+.meta-label{font-size:.68rem;color:var(--text4)}
+.meta-val{font-size:.88rem;color:var(--text2);font-weight:500}
 
-  /* Nav */
-  .nav {
-    display: flex;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: 430px;
-    z-index: 100;
-  }
-  .nav-btn {
-    flex: 1;
-    padding: 12px 4px 16px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    color: var(--muted);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 10px;
-    letter-spacing: 0.5px;
-    transition: color 0.2s;
-  }
-  .nav-btn.active { color: var(--accent); }
-  .nav-btn svg { width: 22px; height: 22px; }
+/* Form */
+.form-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:18px;max-width:860px;margin-left:auto;margin-right:auto}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:.68rem;color:var(--text4);letter-spacing:.1em;text-transform:uppercase}
+.field input,.field select{background:var(--bg);border:1px solid var(--border3);border-radius:8px;padding:10px 12px;color:var(--text);font-size:1rem;font-family:inherit}
+.type-row{display:flex;gap:8px}
+.type-btn{flex:1;padding:10px 0;border:1px solid var(--border3);border-radius:10px;background:transparent;color:var(--text3);cursor:pointer;font-size:1rem;font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 
-  /* Content */
-  .content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px 16px 90px;
-  }
+/* Filter */
+.filter-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;max-width:860px;margin-left:auto;margin-right:auto}
+.filter-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text4);cursor:pointer;font-size:.9rem;font-family:inherit}
+.filter-btn.active{border-color:var(--gold);background:var(--gold-bg);color:var(--gold)}
 
-  /* Cards */
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    margin-bottom: 12px;
-  }
-  .card-label {
-    font-size: 10px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 6px;
-  }
-  .card-value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 28px;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .card-unit { font-size: 13px; color: var(--muted); margin-left: 4px; }
+/* Price update */
+.price-update-bar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:2px}
+.price-update-status{font-size:.75rem;color:var(--text4);line-height:1.4;flex:1;min-width:130px}
+.btn-gold:disabled{opacity:.55;cursor:wait}
 
-  /* Home Stats Grid */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 12px;
-  }
-  .stat-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px;
-  }
-  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; }
-  .stat-unit { font-size: 11px; color: var(--muted); }
+/* Buttons */
+.btn-gold{background:var(--gold);color:#0e0e12;border:none;border-radius:10px;padding:10px 20px;cursor:pointer;font-weight:700;font-size:1rem;font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.btn-outline{background:transparent;border:1px solid var(--border3);color:var(--text3);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:.85rem;font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.btn-ghost{background:transparent;border:none;color:var(--text5);cursor:pointer;font-size:.85rem;font-family:inherit;padding:4px 6px}
 
-  /* Vehicle Banner */
-  .vehicle-banner {
-    background: linear-gradient(135deg, #1a2035 0%, #0f1520 100%);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-bottom: 12px;
-    position: relative;
-    overflow: hidden;
-  }
-  .vehicle-banner::before {
-    content: '';
-    position: absolute;
-    right: -20px; top: -20px;
-    width: 130px; height: 130px;
-    background: radial-gradient(circle, rgba(232,184,75,0.12) 0%, transparent 70%);
-    border-radius: 50%;
-  }
-  .vehicle-name {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 32px;
-    letter-spacing: 2px;
-    color: var(--accent);
-    line-height: 1;
-  }
-  .vehicle-plate {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-  .vehicle-edit-btn {
-    position: absolute; right: 16px; top: 16px;
-    background: rgba(232,184,75,0.1);
-    border: 1px solid rgba(232,184,75,0.3);
-    color: var(--accent);
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 11px;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-  }
+/* Nav */
+.nav-wrap{display:flex;gap:4px;background:var(--bg3);border-radius:10px;padding:4px}
+.nav-btn{padding:8px 22px;border-radius:8px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:.95rem;font-family:inherit}
+.nav-btn.active{background:var(--gold);font-weight:700}
 
-  /* Section Title */
-  .section-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 18px;
-    letter-spacing: 1.5px;
-    color: var(--muted);
-    margin: 20px 0 10px;
-    text-transform: uppercase;
-  }
+/* Modal overlay */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.modal-sheet{background:var(--bg2);border:1px solid var(--border3);border-radius:20px 20px 0 0;padding:28px 20px 40px;width:100%;max-width:600px}
+.modal-confirm{background:var(--bg2);border:1px solid var(--border3);border-radius:20px;padding:32px 28px;width:calc(100% - 48px);max-width:340px;text-align:center;margin:auto}
 
-  /* Records List */
-  .record-item {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    cursor: pointer;
-    transition: border-color 0.15s;
-  }
-  .record-item:hover { border-color: var(--accent); }
-  .record-icon {
-    width: 40px; height: 40px;
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    font-size: 18px;
-  }
-  .record-icon.fuel { background: rgba(232,184,75,0.12); }
-  .record-icon.maint { background: rgba(75,157,232,0.12); }
-  .record-body { flex: 1; min-width: 0; }
-  .record-title { font-weight: 600; font-size: 14px; color: var(--text); }
-  .record-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .record-amount {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--accent);
-    flex-shrink: 0;
-  }
-  .record-amount.blue { color: var(--accent2); }
+/* Empty */
+.empty{text-align:center;padding:64px 0;color:var(--text4)}
 
-  /* FAB */
-  .fab {
-    position: fixed;
-    bottom: 80px;
-    right: calc(50% - 215px + 16px);
-    width: 52px; height: 52px;
-    background: var(--accent);
-    color: #0d0f14;
-    border: none;
-    border-radius: 50%;
-    font-size: 26px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 20px rgba(232,184,75,0.4);
-    transition: transform 0.15s, box-shadow 0.15s;
-    z-index: 99;
-  }
-  .fab:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(232,184,75,0.55); }
-
-  /* Modal */
-  .modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.75);
-    z-index: 200;
-    display: flex; align-items: flex-end; justify-content: center;
-    animation: fadeIn 0.2s;
-  }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  .modal {
-    background: var(--surface);
-    border-radius: 20px 20px 0 0;
-    width: 100%; max-width: 430px;
-    padding: 24px 20px 40px;
-    border-top: 1px solid var(--border);
-    animation: slideUp 0.25s cubic-bezier(0.32,0.72,0,1);
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  .modal-handle {
-    width: 36px; height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    margin: 0 auto 20px;
-  }
-  .modal-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 22px;
-    letter-spacing: 1.5px;
-    color: var(--accent);
-    margin-bottom: 20px;
-  }
-
-  /* Form */
-  .form-group { margin-bottom: 14px; }
-  .form-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; display: block; }
-  .form-input {
-    width: 100%;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 15px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .form-input:focus { border-color: var(--accent); }
-  .form-input[type="date"] { appearance: none; -webkit-appearance: none; width: 100%; box-sizing: border-box; }
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-  /* Buttons */
-  .btn-primary {
-    width: 100%;
-    background: var(--accent);
-    color: #0d0f14;
-    border: none;
-    border-radius: 12px;
-    padding: 14px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    margin-top: 6px;
-    transition: opacity 0.15s;
-  }
-  .btn-primary:hover { opacity: 0.9; }
-  .btn-cancel {
-    width: 100%;
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px;
-    font-size: 14px;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    margin-top: 8px;
-  }
-
-  /* Settings */
-  .settings-section { margin-bottom: 24px; }
-  .settings-section-title {
-    font-size: 11px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-    padding: 0 4px;
-  }
-  .settings-item {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    margin-bottom: 2px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-  }
-  .settings-item-label { font-size: 14px; }
-  .settings-item-value { font-size: 13px; color: var(--muted); }
-
-  /* Toggle */
-  .toggle {
-    width: 44px; height: 24px;
-    background: var(--border);
-    border-radius: 12px;
-    position: relative;
-    cursor: pointer;
-    transition: background 0.2s;
-    border: none;
-    flex-shrink: 0;
-  }
-  .toggle.on { background: var(--accent); }
-  .toggle::after {
-    content: '';
-    position: absolute;
-    width: 18px; height: 18px;
-    background: #fff;
-    border-radius: 50%;
-    top: 3px; left: 3px;
-    transition: transform 0.2s;
-  }
-  .toggle.on::after { transform: translateX(20px); }
-
-  /* Pill badges */
-  .pill {
-    display: inline-block;
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 99px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .pill.green { background: rgba(75,232,160,0.15); color: var(--green); }
-  .pill.yellow { background: rgba(232,184,75,0.15); color: var(--accent); }
-  .pill.blue { background: rgba(75,157,232,0.15); color: var(--accent2); }
-
-  /* Efficiency meter */
-  .eff-bar {
-    height: 6px;
-    background: var(--border);
-    border-radius: 3px;
-    margin-top: 6px;
-    overflow: hidden;
-  }
-  .eff-fill {
-    height: 100%;
-    border-radius: 3px;
-    background: linear-gradient(90deg, var(--accent2), var(--green));
-    transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
-  }
-
-  .empty-state {
-    text-align: center;
-    color: var(--muted);
-    padding: 40px 20px;
-    font-size: 14px;
-  }
-  .empty-icon { font-size: 40px; margin-bottom: 12px; }
-
-  .delete-btn {
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 4px;
-    border-radius: 6px;
-    transition: color 0.15s;
-    font-size: 16px;
-  }
-  .delete-btn:hover { color: var(--danger); }
-
-  select.form-input option { background: var(--card); }
-`;
-
-// ─── Icons ─────────────────────────────────────────────────────────────────
-const icons = {
-  home: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12L12 3l9 9"/><path d="M9 21V12h6v9"/><path d="M3 12v9h18V12"/></svg>,
-  fuel: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 22V6a2 2 0 012-2h8a2 2 0 012 2v4"/><path d="M15 10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2"/><path d="M7 8h4"/><path d="M7 12h4"/><line x1="7" y1="16" x2="7" y2="16"/></svg>,
-  wrench: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.77 3.77z"/></svg>,
-  settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
-};
-
-// ─── Sample Data ────────────────────────────────────────────────────────────
-const initFuel = [
-  { id: 1, date: "2025-05-10", station: "中油", liters: 40.2, price: 31.5, total: 1266, odometer: 45820, note: "" },
-  { id: 2, date: "2025-04-22", station: "台塑", liters: 38.7, price: 31.5, total: 1219, odometer: 45340, note: "高速公路補油" },
-  { id: 3, date: "2025-04-05", station: "中油", liters: 42.1, price: 30.8, total: 1297, odometer: 44860, note: "" },
-];
-const initMaint = [
-  { id: 1, date: "2025-05-01", type: "機油更換", shop: "原廠保養", cost: 2800, odometer: 45600, note: "0W-20全合成" },
-  { id: 2, date: "2025-02-15", type: "輪胎旋轉", shop: "米其林輪胎店", cost: 600, odometer: 43200, note: "" },
-  { id: 3, date: "2024-11-20", type: "煞車皮更換", shop: "路邊修車廠", cost: 5500, odometer: 40000, note: "前後輪" },
-];
-
-// ─── Main App ───────────────────────────────────────────────────────────────
-export default function App() {
-  const [tab, setTab] = useState("home");
-  const [fuel, setFuel] = useState(initFuel);
-  const [maint, setMaint] = useState(initMaint);
-  const [vehicle, setVehicle] = useState({ name: "Toyota Corolla", plate: "ABC-1234", year: "2020" });
-  const [modal, setModal] = useState(null); // 'fuel' | 'maint' | 'vehicle'
-  const [settings, setSettings] = useState({ unit: "km/L", currency: "TWD", reminder: true, darkMode: true });
-
-  // Calculate stats
-  const totalFuelCost = fuel.reduce((s, r) => s + r.total, 0);
-  const totalMaintCost = maint.reduce((s, r) => s + r.cost, 0);
-  const totalCost = totalFuelCost + totalMaintCost;
-  const avgEfficiency = fuel.length >= 2
-    ? (() => {
-        const sorted = [...fuel].sort((a, b) => a.odometer - b.odometer);
-        const dist = sorted[sorted.length - 1].odometer - sorted[0].odometer;
-        const liters = sorted.slice(1).reduce((s, r) => s + r.liters, 0);
-        return liters > 0 ? (dist / liters).toFixed(1) : "-";
-      })()
-    : "-";
-
-  const tabs = [
-    { id: "home", label: "主頁", icon: icons.home },
-    { id: "fuel", label: "油耗", icon: icons.fuel },
-    { id: "maint", label: "保養", icon: icons.wrench },
-    { id: "settings", label: "設定", icon: icons.settings },
-  ];
-
-  return (
-    <>
-      <style>{css}</style>
-      <div className="app">
-        <Header tab={tab} />
-        <div className="content">
-          {tab === "home" && <HomeTab fuel={fuel} maint={maint} vehicle={vehicle} avgEff={avgEfficiency} totalCost={totalCost} totalFuelCost={totalFuelCost} totalMaintCost={totalMaintCost} onEditVehicle={() => setModal("vehicle")} />}
-          {tab === "fuel" && <FuelTab fuel={fuel} setFuel={setFuel} />}
-          {tab === "maint" && <MaintTab maint={maint} setMaint={setMaint} />}
-          {tab === "settings" && <SettingsTab settings={settings} setSettings={setSettings} vehicle={vehicle} setVehicle={setVehicle} />}
-        </div>
-
-        {(tab === "fuel" || tab === "maint") && (
-          <button className="fab" onClick={() => setModal(tab)}>＋</button>
-        )}
-
-        <nav className="nav">
-          {tabs.map(t => (
-            <button key={t.id} className={`nav-btn ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
-              {t.icon}{t.label}
-            </button>
-          ))}
-        </nav>
-
-        {modal === "fuel" && <FuelModal initial={null} onClose={() => setModal(null)} onSave={r => { setFuel(p => [r, ...p]); setModal(null); }} />}
-        {modal === "maint" && <MaintModal initial={null} onClose={() => setModal(null)} onSave={r => { setMaint(p => [r, ...p]); setModal(null); }} />}
-        {modal === "vehicle" && <VehicleModal vehicle={vehicle} onClose={() => setModal(null)} onSave={v => { setVehicle(v); setModal(null); }} />}
-      </div>
-    </>
-  );
-}
-
-// ─── Header ─────────────────────────────────────────────────────────────────
-function Header({ tab }) {
-  const titles = { home: "CarLog", fuel: "油耗紀錄", maint: "保養紀錄", settings: "設定" };
-  const subs = { home: "Vehicle Tracker", fuel: "Fuel Tracker", maint: "Maintenance", settings: "Preferences" };
-  return (
-    <div className="header">
-      <div>
-        <div className="header-title">{titles[tab]}</div>
-        <div className="header-sub">{subs[tab]}</div>
-      </div>
-      <div style={{ fontSize: 28 }}>🚗</div>
+/* Colors */
+.c-gold{color:var(--gold)} .c-red{color:var(--red)} .c-green{color:var(--green)} .c-blue{color:var(--blue)} .c-text{color:var(--text)} .c-text4{color:var(--text4)}
+.bg-red{background:var(--red-bg)} .bg-green{background:var(--green-bg)} .bg-blue{background:var(--blue-bg)}
+.border-red{border-color:var(--red-border)!important} .border-green{border-color:var(--green-border)!important} .border-blue{border-color:var(--blue-border)!important}
+</style>
+</head>
+<body class="dark">
+<div id="app">
+  <div id="header">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:1.2rem;color:var(--gold)">◈</span>
+      <span style="font-size:.95rem;letter-spacing:.22em;color:var(--gold);font-weight:700">EQUITI</span>
     </div>
-  );
-}
-
-// ─── Home Tab ───────────────────────────────────────────────────────────────
-function HomeTab({ fuel, maint, vehicle, avgEff, totalCost, totalFuelCost, totalMaintCost, onEditVehicle }) {
-  const lastFuel = fuel.slice().sort((a,b) => a.odometer - b.odometer).slice(-1)[0];
-  const effPct = avgEff !== "-" ? Math.min(100, (parseFloat(avgEff) / 20) * 100) : 0;
-
-  return (
-    <>
-      {/* Vehicle */}
-      <div className="vehicle-banner">
-        <div className="vehicle-name">{vehicle.name}</div>
-        <div className="vehicle-plate">🪪 {vehicle.plate} · {vehicle.year}</div>
-        <button className="vehicle-edit-btn" onClick={onEditVehicle}>編輯</button>
-      </div>
-
-      {/* Oil Efficiency */}
-      <div className="card">
-        <div className="card-label">平均油耗</div>
-        <div className="card-value">{avgEff}<span className="card-unit">km/L</span></div>
-        <div className="eff-bar"><div className="eff-fill" style={{ width: `${effPct}%` }} /></div>
-        {lastFuel && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>上次加油：{lastFuel.date}・{lastFuel.liters}L</div>}
-      </div>
-
-      {/* Stats Grid */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-label">油費支出</div>
-          <div className="stat-value" style={{ color: "var(--accent)" }}>
-            ${totalFuelCost.toLocaleString()}<span className="stat-unit"> 元</span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">保養支出</div>
-          <div className="stat-value" style={{ color: "var(--accent2)" }}>
-            ${totalMaintCost.toLocaleString()}<span className="stat-unit"> 元</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Total Cost */}
-      <div className="card" style={{ background: "linear-gradient(135deg,#1a2035,#0f1520)", borderColor: "rgba(232,184,75,0.25)" }}>
-        <div className="card-label">養車總費用</div>
-        <div className="card-value" style={{ fontSize: 36, color: "var(--accent)" }}>
-          ${totalCost.toLocaleString()}<span className="card-unit">元</span>
-        </div>
-        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>共 {fuel.length} 次加油・{maint.length} 次保養</div>
-      </div>
-    </>
-  );
-}
-
-// ─── Fuel Tab ───────────────────────────────────────────────────────────────
-function FuelTab({ fuel, setFuel }) {
-  const [editing, setEditing] = useState(null);
-  const sorted = [...fuel].sort((a, b) => new Date(b.date) - new Date(a.date));
-  const handleUpdate = (updated) => {
-    setFuel(p => p.map(r => r.id === updated.id ? updated : r));
-    setEditing(null);
-  };
-  return (
-    <>
-      <div className="section-title">加油紀錄</div>
-      {sorted.length === 0 && <div className="empty-state"><div className="empty-icon">⛽</div>尚無加油紀錄<br/>點擊右下角 ＋ 新增</div>}
-      {sorted.map((r, i) => {
-        const prev = sorted[i + 1];
-        const eff = prev ? ((r.odometer - prev.odometer) / r.liters).toFixed(1) : null;
-        return (
-          <div key={r.id} className="record-item" style={{ flexWrap: "wrap", gap: 10 }} onClick={() => setEditing(r)}>
-            <div className="record-icon fuel">⛽</div>
-            <div className="record-body">
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div className="record-title">{r.station}</div>
-                {eff && <span className="pill green">{eff} km/L</span>}
-              </div>
-              <div className="record-meta">{r.date}・{r.liters}L・{r.price}元/L・里程 {r.odometer.toLocaleString()}km</div>
-              {r.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{r.note}</div>}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={e => e.stopPropagation()}>
-              <div className="record-amount">${r.total.toLocaleString()}</div>
-              <button className="delete-btn" onClick={() => setFuel(p => p.filter(x => x.id !== r.id))}>✕</button>
-            </div>
-          </div>
-        );
-      })}
-      {editing && (
-        <FuelModal
-          initial={editing}
-          onClose={() => setEditing(null)}
-          onSave={handleUpdate}
-        />
-      )}
-    </>
-  );
-}
-
-// ─── Maint Tab ──────────────────────────────────────────────────────────────
-function MaintTab({ maint, setMaint }) {
-  const [editing, setEditing] = useState(null);
-  const sorted = [...maint].sort((a, b) => new Date(b.date) - new Date(a.date));
-  const typeColors = { "機油更換": "yellow", "輪胎旋轉": "blue", "煞車皮更換": "green" };
-  const handleUpdate = (updated) => {
-    setMaint(p => p.map(r => r.id === updated.id ? updated : r));
-    setEditing(null);
-  };
-  return (
-    <>
-      <div className="section-title">保養紀錄</div>
-      {sorted.length === 0 && <div className="empty-state"><div className="empty-icon">🔧</div>尚無保養紀錄<br/>點擊右下角 ＋ 新增</div>}
-      {sorted.map(r => (
-        <div key={r.id} className="record-item" onClick={() => setEditing(r)}>
-          <div className="record-icon maint">🔧</div>
-          <div className="record-body">
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div className="record-title">{r.type}</div>
-              <span className={`pill ${typeColors[r.type] || "blue"}`}>{r.type.includes("油") ? "耗材" : "服務"}</span>
-            </div>
-            <div className="record-meta">{r.date}・{r.shop}・里程 {r.odometer.toLocaleString()}km</div>
-            {r.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{r.note}</div>}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={e => e.stopPropagation()}>
-            <div className="record-amount blue">${r.cost.toLocaleString()}</div>
-            <button className="delete-btn" onClick={() => setMaint(p => p.filter(x => x.id !== r.id))}>✕</button>
-          </div>
-        </div>
-      ))}
-      {editing && (
-        <MaintModal
-          initial={editing}
-          onClose={() => setEditing(null)}
-          onSave={handleUpdate}
-        />
-      )}
-    </>
-  );
-}
-
-// ─── Settings Tab ───────────────────────────────────────────────────────────
-function SettingsTab({ settings, setSettings, vehicle, setVehicle }) {
-  const tog = key => setSettings(s => ({ ...s, [key]: !s[key] }));
-  return (
-    <>
-      <div className="settings-section">
-        <div className="settings-section-title">車輛資訊</div>
-        <div className="card" style={{ padding: "14px 16px" }}>
-          <div style={{ marginBottom: 12 }}>
-            <div className="form-label">車名</div>
-            <input className="form-input" value={vehicle.name} onChange={e => setVehicle(v => ({ ...v, name: e.target.value }))} />
-          </div>
-          <div className="form-row">
-            <div>
-              <div className="form-label">車牌</div>
-              <input className="form-input" value={vehicle.plate} onChange={e => setVehicle(v => ({ ...v, plate: e.target.value }))} />
-            </div>
-            <div>
-              <div className="form-label">年份</div>
-              <input className="form-input" value={vehicle.year} onChange={e => setVehicle(v => ({ ...v, year: e.target.value }))} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="settings-section">
-        <div className="settings-section-title">偏好設定</div>
-        <div className="settings-item" onClick={() => setSettings(s => ({ ...s, unit: s.unit === "km/L" ? "L/100km" : "km/L" }))}>
-          <span className="settings-item-label">油耗單位</span>
-          <span className="settings-item-value">{settings.unit} ▸</span>
-        </div>
-        <div className="settings-item" onClick={() => setSettings(s => ({ ...s, currency: s.currency === "TWD" ? "USD" : "TWD" }))}>
-          <span className="settings-item-label">幣別</span>
-          <span className="settings-item-value">{settings.currency} ▸</span>
-        </div>
-        <div className="settings-item">
-          <span className="settings-item-label">保養提醒</span>
-          <button className={`toggle ${settings.reminder ? "on" : ""}`} onClick={() => tog("reminder")} />
-        </div>
-      </div>
-
-      <div className="settings-section">
-        <div className="settings-section-title">關於</div>
-        <div className="settings-item">
-          <span className="settings-item-label">版本</span>
-          <span className="settings-item-value">1.0.0</span>
-        </div>
-        <div className="settings-item">
-          <span className="settings-item-label">開發者</span>
-          <span className="settings-item-value">CarLog Studio</span>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ─── Modals ─────────────────────────────────────────────────────────────────
-function FuelModal({ initial, onClose, onSave }) {
-  const isEdit = !!initial;
-  const blank = { date: new Date().toISOString().slice(0, 10), station: "中油", liters: "", price: "31.5", odometer: "", note: "" };
-  const [form, setForm] = useState(isEdit
-    ? { ...initial, liters: String(initial.liters), price: String(initial.price), odometer: String(initial.odometer) }
-    : blank
-  );
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const total = Math.round((parseFloat(form.liters) || 0) * (parseFloat(form.price) || 0));
-  const handleSave = () => {
-    if (!form.liters || !form.odometer) return alert("請填寫公升數和里程");
-    const record = { ...(isEdit ? initial : { id: Date.now() }), ...form, liters: parseFloat(form.liters), price: parseFloat(form.price), total, odometer: parseInt(form.odometer) };
-    onSave(record);
-  };
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-handle" />
-        <div className="modal-title">{isEdit ? "編輯加油紀錄" : "新增加油紀錄"}</div>
-        <div className="form-group">
-          <label className="form-label">日期</label>
-          <input className="form-input" type="date" value={form.date} onChange={e => set("date", e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">加油站</label>
-          <select className="form-input" value={form.station} onChange={e => set("station", e.target.value)}>
-            <option>中油</option><option>台塑</option><option>全國</option><option>其他</option>
-          </select>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">公升數 (L)</label>
-            <input className="form-input" type="number" placeholder="0.0" value={form.liters} onChange={e => set("liters", e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">油價 (元/L)</label>
-            <input className="form-input" type="number" placeholder="0.0" value={form.price} onChange={e => set("price", e.target.value)} />
-          </div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">當前里程 (km)</label>
-          <input className="form-input" type="number" placeholder="45000" value={form.odometer} onChange={e => set("odometer", e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">備註</label>
-          <input className="form-input" placeholder="選填" value={form.note} onChange={e => set("note", e.target.value)} />
-        </div>
-        {total > 0 && <div style={{ textAlign: "center", color: "var(--accent)", fontFamily: "JetBrains Mono, monospace", fontSize: 22, marginBottom: 8 }}>
-          本次費用：${total.toLocaleString()} 元
-        </div>}
-        <button className="btn-primary" onClick={handleSave}>{isEdit ? "儲存修改" : "儲存紀錄"}</button>
-        <button className="btn-cancel" onClick={onClose}>取消</button>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn-outline" id="theme-btn" onclick="toggleTheme()">☀️</button>
+      <div class="nav-wrap">
+        <button class="nav-btn active" id="nav-home" onclick="showPage('home')">總覽</button>
+        <button class="nav-btn" id="nav-records" onclick="showPage('records')">紀錄</button>
       </div>
     </div>
-  );
-}
+  </div>
 
-function MaintModal({ initial, onClose, onSave }) {
-  const isEdit = !!initial;
-  const blank = { date: new Date().toISOString().slice(0, 10), type: "機油更換", shop: "", cost: "", odometer: "", note: "" };
-  const [form, setForm] = useState(isEdit
-    ? { ...initial, cost: String(initial.cost), odometer: String(initial.odometer) }
-    : blank
-  );
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const handleSave = () => {
-    if (!form.cost || !form.shop) return alert("請填寫費用和維修廠");
-    const record = { ...(isEdit ? initial : { id: Date.now() }), ...form, cost: parseInt(form.cost), odometer: parseInt(form.odometer) || 0 };
-    onSave(record);
-  };
-  const types = ["機油更換", "輪胎旋轉", "輪胎更換", "煞車皮更換", "空氣濾清器", "火星塞", "冷卻液", "定期保養", "其他"];
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-handle" />
-        <div className="modal-title">{isEdit ? "編輯保養紀錄" : "新增保養紀錄"}</div>
-        <div className="form-group">
-          <label className="form-label">日期</label>
-          <input className="form-input" type="date" value={form.date} onChange={e => set("date", e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">保養項目</label>
-          <select className="form-input" value={form.type} onChange={e => set("type", e.target.value)}>
-            {types.map(t => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">維修廠名稱</label>
-          <input className="form-input" placeholder="例：原廠保養" value={form.shop} onChange={e => set("shop", e.target.value)} />
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">費用 (元)</label>
-            <input className="form-input" type="number" placeholder="0" value={form.cost} onChange={e => set("cost", e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">當前里程 (km)</label>
-            <input className="form-input" type="number" placeholder="45000" value={form.odometer} onChange={e => set("odometer", e.target.value)} />
-          </div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">備註 / 耗材詳情</label>
-          <input className="form-input" placeholder="選填" value={form.note} onChange={e => set("note", e.target.value)} />
-        </div>
-        <button className="btn-primary" onClick={handleSave}>{isEdit ? "儲存修改" : "儲存紀錄"}</button>
-        <button className="btn-cancel" onClick={onClose}>取消</button>
+  <!-- HOME -->
+  <div id="page-home" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+    <div id="summary">
+      <div class="sum-grid" id="sum-grid"></div>
+    </div>
+    <div id="cards-area">
+      <div class="price-update-bar">
+        <button class="btn-gold" id="update-prices-btn" onclick="updatePricesFromTwelveData()">↻ 更新股價</button>
+        <button class="btn-outline" id="twelvedata-key-btn" onclick="configureTwelveDataKey()">設定 API Key</button>
+        <span class="price-update-status" id="price-update-status" role="status" aria-live="polite">股價來源：手動輸入</span>
+      </div>
+      <div class="card-grid" id="card-grid"></div>
+      <div class="empty" id="empty-home" style="display:none">
+        <div style="font-size:2.5rem;margin-bottom:14px;color:var(--border)">◎</div>
+        <p style="margin-bottom:20px">尚無持倉，前往紀錄頁新增交易</p>
+        <button class="btn-outline" onclick="showPage('records')">前往紀錄頁 →</button>
       </div>
     </div>
-  );
-}
+  </div>
 
-function VehicleModal({ vehicle, onClose, onSave }) {
-  const [form, setForm] = useState({ ...vehicle });
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div className="modal-handle" />
-        <div className="modal-title">編輯車輛資訊</div>
-        <div className="form-group">
-          <label className="form-label">車名</label>
-          <input className="form-input" value={form.name} onChange={e => set("name", e.target.value)} />
+  <!-- RECORDS -->
+  <div id="page-records" style="display:none;flex-direction:column;flex:1;min-height:0;overflow-y:scroll;-webkit-overflow-scrolling:touch">
+    <div style="max-width:860px;margin:0 auto;padding:0 16px;padding-bottom:max(80px,calc(env(safe-area-inset-bottom)+60px))">
+      <div class="rec-header">
+        <div>
+          <h2 style="font-size:1.3rem;font-weight:700;margin-bottom:4px">交易紀錄</h2>
+          <p style="color:var(--text4);font-size:.82rem" id="rec-count">共 0 筆</p>
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label">車牌</label>
-            <input className="form-input" value={form.plate} onChange={e => set("plate", e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">年份</label>
-            <input className="form-input" value={form.year} onChange={e => set("year", e.target.value)} />
+        <button class="btn-gold" id="toggle-form-btn" onclick="toggleForm()">+ 新增</button>
+      </div>
+      <!-- Add Form -->
+      <div id="add-form" style="display:none" class="form-card">
+        <h3 style="font-size:.95rem;color:var(--gold);margin-bottom:16px">新增紀錄</h3>
+        <div style="margin-bottom:16px">
+          <div class="type-row">
+            <button class="type-btn" id="type-buy" onclick="setType('buy')">買入</button>
+            <button class="type-btn" id="type-sell" onclick="setType('sell')">賣出</button>
+            <button class="type-btn" id="type-div" onclick="setType('dividend')">股利</button>
           </div>
         </div>
-        <button className="btn-primary" onClick={() => onSave(form)}>儲存</button>
-        <button className="btn-cancel" onClick={onClose}>取消</button>
+        <div class="form-grid" id="form-fields"></div>
+        <p id="form-error" style="color:var(--red);font-size:.88rem;margin-bottom:12px;display:none"></p>
+        <button class="btn-gold" onclick="submitForm()">確認新增</button>
+      </div>
+      <!-- Filter -->
+      <div class="filter-row" id="filter-row"></div>
+      <!-- List -->
+      <div class="rec-list" id="rec-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="overlay" id="del-modal" style="display:none" onclick="closeDelModal()">
+  <div class="modal-confirm" onclick="event.stopPropagation()">
+    <p style="font-size:1rem;font-weight:700;margin-bottom:8px">確認刪除這筆紀錄？</p>
+    <p style="font-size:.85rem;color:var(--text4);margin-bottom:28px">此操作無法復原</p>
+    <div style="display:flex;gap:10px">
+      <button class="btn-outline" style="flex:1;padding:12px" onclick="closeDelModal()">取消</button>
+      <button onclick="confirmDelete()" style="flex:1;padding:12px;border-radius:10px;border:none;background:var(--red);color:#fff;cursor:pointer;font-weight:700;font-size:.95rem;font-family:inherit">刪除</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div class="overlay" id="edit-modal" style="display:none" onclick="closeEditModal()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 style="font-size:1rem;font-weight:700;color:var(--gold)">修改紀錄</h3>
+      <button class="btn-ghost" onclick="closeEditModal()">✕</button>
+    </div>
+    <div style="margin-bottom:16px">
+      <div class="type-row">
+        <button class="type-btn" id="etype-buy" onclick="setEditType('buy')">買入</button>
+        <button class="type-btn" id="etype-sell" onclick="setEditType('sell')">賣出</button>
+        <button class="type-btn" id="etype-div" onclick="setEditType('dividend')">股利</button>
       </div>
     </div>
-  );
+    <div class="form-grid" id="edit-fields"></div>
+    <button class="btn-gold" style="width:100%" onclick="saveEdit()">儲存修改</button>
+  </div>
+</div>
+
+<script>
+const COLORS = ["#C8A96E","#7EB8A4","#E07B5A","#8B9DC3","#C47EB5","#6BAF8A","#D4956A","#7CA3D4","#B5C46B","#D4A574"];
+const TICKER_NAMES = {AAPL:"Apple Inc.",MSFT:"Microsoft Corp.",GOOGL:"Alphabet Inc.",AMZN:"Amazon.com Inc.",NVDA:"NVIDIA Corp.",META:"Meta Platforms",TSLA:"Tesla Inc.",BRKB:"Berkshire Hathaway",JPM:"JPMorgan Chase",V:"Visa Inc.",VT:"Vanguard Total World",VTI:"Vanguard Total US",QQQ:"Invesco QQQ",SPY:"SPDR S&P 500",SCHD:"Schwab US Dividend",VGIT:"Vanguard Int-Term Treasury",VXUS:"Vanguard Total Intl",BND:"Vanguard Total Bond"};
+
+// ── State ──
+let records = [];
+let prices = {};
+let theme = 'dark';
+let filterTicker = 'ALL';
+let formType = 'buy';
+let editType = 'buy';
+let editId = null;
+let deleteId = null;
+let editingPriceTicker = null;
+let currentPage = 'home';
+
+// ── Load ──
+function load() {
+  try { records = JSON.parse(localStorage.getItem('equiti_v2') || '[]'); } catch { records = []; }
+  try { prices = JSON.parse(localStorage.getItem('equiti_prices') || '{}'); } catch { prices = {}; }
+  theme = localStorage.getItem('equiti_theme') || 'dark';
+  document.body.className = theme;
+  document.getElementById('theme-btn').textContent = theme === 'dark' ? '☀️' : '🌙';
 }
+
+function save() {
+  localStorage.setItem('equiti_v2', JSON.stringify(records));
+  localStorage.setItem('equiti_prices', JSON.stringify(prices));
+}
+
+// ── Helpers ──
+function fmt(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtShares(n) { return n%1===0 ? n.toString() : n.toFixed(5).replace(/\.?0+$/,''); }
+function fmtDate(d) { if(!d) return ''; const [y,m,day]=d.split('-'); return `${y.slice(2)}/${m}/${day}`; }
+
+function getPortfolio() {
+  const map = {};
+  records.forEach(r => {
+    if(!map[r.ticker]) map[r.ticker]={ticker:r.ticker,name:r.name,shares:0,cost:0,dividend:0};
+    if(r.type==='buy'){map[r.ticker].shares+=r.shares;map[r.ticker].cost+=r.shares*r.price+(r.commission||0);}
+    else if(r.type==='sell'){map[r.ticker].shares-=r.shares;map[r.ticker].cost-=r.shares*r.price-(r.commission||0);}
+    else if(r.type==='dividend'){map[r.ticker].cost-=r.dividend||0;map[r.ticker].dividend+=r.dividend||0;}
+  });
+  return Object.values(map).filter(p=>p.shares>0.0001);
+}
+
+// ── Theme ──
+function toggleTheme() {
+  theme = theme==='dark' ? 'light' : 'dark';
+  document.body.className = theme;
+  document.getElementById('theme-btn').textContent = theme==='dark' ? '☀️' : '🌙';
+  localStorage.setItem('equiti_theme', theme);
+  render();
+}
+
+// ── Navigation ──
+function showPage(page) {
+  currentPage = page;
+  document.getElementById('page-home').style.display = page==='home' ? 'flex' : 'none';
+  document.getElementById('page-records').style.display = page==='records' ? 'flex' : 'none';
+  document.getElementById('nav-home').className = 'nav-btn' + (page==='home'?' active':'');
+  document.getElementById('nav-records').className = 'nav-btn' + (page==='records'?' active':'');
+  document.getElementById('nav-home').style.color = page==='home' ? (theme==='dark'?'#0e0e12':'#fff') : '';
+  document.getElementById('nav-records').style.color = page==='records' ? (theme==='dark'?'#0e0e12':'#fff') : '';
+  render();
+}
+
+// ── Render Summary ──
+function renderSummary(portfolio) {
+  const totalCost = portfolio.reduce((s,p)=>s+p.cost,0);
+  const totalDiv  = portfolio.reduce((s,p)=>s+p.dividend,0);
+  const totalMkt  = portfolio.reduce((s,p)=>s+(prices[p.ticker]?p.shares*prices[p.ticker]:p.cost),0);
+  const totalPnL  = portfolio.reduce((s,p)=>{const cp=prices[p.ticker];return cp?s+(p.shares*cp-p.cost):s;},0);
+  const hasPrice  = portfolio.some(p=>prices[p.ticker]);
+
+  const isDark = theme==='dark';
+  const pnlUp = totalPnL>=0;
+
+  document.getElementById('sum-grid').innerHTML = `
+    <div class="sum-box">
+      <div class="sum-label">市值</div>
+      <div class="sum-val c-gold">$${fmt(hasPrice?totalMkt:totalCost)}</div>
+      ${!hasPrice?'<div class="sum-sub c-text4">以成本顯示</div>':''}
+    </div>
+    <div class="sum-box ${hasPrice?(pnlUp?'bg-red border-red':'bg-green border-green'):''}">
+      <div class="sum-label">損益</div>
+      ${hasPrice
+        ? `<div class="sum-val ${pnlUp?'c-red':'c-green'}">${pnlUp?'+':'-'}$${fmt(Math.abs(totalPnL))}</div>
+           <div class="sum-sub ${pnlUp?'c-red':'c-green'}">${totalCost>0?((totalPnL/totalCost)*100).toFixed(2):'0.00'}%</div>`
+        : '<div class="sum-val c-text4">—</div>'
+      }
+    </div>
+    <div class="sum-box">
+      <div class="sum-label">成本</div>
+      <div class="sum-val c-text">$${fmt(totalCost)}</div>
+      <div class="sum-sub c-text4">${portfolio.length} 支持倉</div>
+    </div>
+    <div class="sum-box ${totalDiv>0?'bg-blue border-blue':''}">
+      <div class="sum-label">已收股利</div>
+      <div class="sum-val ${totalDiv>0?'c-blue':'c-text4'}">${totalDiv>0?'$'+fmt(totalDiv):'—'}</div>
+    </div>`;
+}
+
+// ── Render Cards ──
+function renderCards(portfolio) {
+  const grid = document.getElementById('card-grid');
+  const empty = document.getElementById('empty-home');
+  const totalMkt = portfolio.reduce((s,p)=>s+(prices[p.ticker]?p.shares*prices[p.ticker]:p.cost),0);
+
+  if(portfolio.length===0){ grid.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  grid.innerHTML = portfolio.map((p,i)=>{
+    const color = COLORS[i%COLORS.length];
+    const cp = prices[p.ticker]||null;
+    const mktVal = cp?p.shares*cp:null;
+    const pnl = cp?mktVal-p.cost:null;
+    const pnlPct = pnl!==null&&p.cost>0?(pnl/p.cost)*100:null;
+    const mktPct = ((cp?mktVal:p.cost)/totalMkt*100);
+    const pnlUp = pnl!==null&&pnl>=0;
+    const priceBg = cp?(pnlUp?'bg-red':'bg-green'):'';
+    const cardBorderStyle = cp?`border-color:${pnlUp?'var(--red-border)':'var(--green-border)'}`:''
+
+    const editingThis = editingPriceTicker===p.ticker;
+
+    return `<div class="card" style="${cardBorderStyle}">
+      <div class="card-head">
+        <div class="ticker-badge" style="color:${color};background:${color}22;border-color:${color}55">${p.ticker}</div>
+        <div class="pct-block">
+          <span class="pct-big" style="color:${color}">${mktPct.toFixed(1)}%</span>
+          <span class="pct-small">${cp?'市值佔比':'成本佔比'}</span>
+        </div>
+      </div>
+      <div class="price-box ${priceBg}" style="${cp?(pnlUp?'border:1px solid var(--red-border)':'border:1px solid var(--green-border)'):''}">
+        <div>
+          <span class="price-label">${cp?'現價':'點 ✎ 輸入現價'}</span>
+          <span class="price-val ${cp?'c-text':'c-text4'}">${cp?'$'+cp.toFixed(2):'—'}</span>
+        </div>
+        ${pnl!==null
+          ? `<div style="text-align:right">
+               <span class="price-label">損益</span>
+               <span class="pnl-val ${pnlUp?'c-red':'c-green'}">${pnlUp?'+':'-'}$${fmt(Math.abs(pnl))}</span>
+               <span class="pnl-pct ${pnlUp?'c-red':'c-green'}">${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%</span>
+             </div>`
+          : `<button class="btn-outline" onclick="startEditPrice('${p.ticker}')">✎ 輸入現價</button>`
+        }
+      </div>
+      ${editingThis?`
+        <div class="edit-price-row">
+          <input id="price-input-${p.ticker}" type="text" inputmode="decimal" placeholder="輸入現價" value="${cp||''}"
+            style="flex:1;background:var(--bg);border:1px solid var(--gold);border-radius:8px;padding:9px 12px;color:var(--text);font-size:1rem;font-family:inherit"
+            onkeydown="if(event.key==='Enter')savePrice('${p.ticker}')" />
+          <button class="btn-gold" style="padding:9px 16px;border-radius:8px" onclick="savePrice('${p.ticker}')">確認</button>
+          <button class="btn-outline" style="padding:9px 12px" onclick="cancelPrice()">✕</button>
+        </div>`:''}
+      <div class="stats-row">
+        <div class="stat-item"><span class="stat-label">持有股數</span><span class="stat-val">${fmtShares(p.shares)}</span></div>
+        <div class="stat-item"><span class="stat-label">均價</span><span class="stat-val">$${(p.cost/p.shares).toFixed(2)}</span></div>
+        <div class="stat-item"><span class="stat-label">${mktVal?'市值':'淨成本'}</span><span class="stat-val">$${fmt(mktVal||p.cost)}</span></div>
+      </div>
+      <div class="card-footer">
+        <div>${p.dividend>0?`<span style="font-size:.72rem;color:var(--blue)">已收股利 $${fmt(p.dividend)}</span>`:''}</div>
+        ${cp?`<button class="btn-ghost" onclick="startEditPrice('${p.ticker}')">✎ 修改現價</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Focus price input if editing
+  if(editingPriceTicker){
+    setTimeout(()=>{
+      const inp = document.getElementById('price-input-'+editingPriceTicker);
+      if(inp) inp.focus();
+    },50);
+  }
+}
+
+function startEditPrice(ticker){
+  editingPriceTicker = ticker;
+  render();
+}
+function cancelPrice(){
+  editingPriceTicker = null;
+  render();
+}
+function savePrice(ticker){
+  const inp = document.getElementById('price-input-'+ticker);
+  if(inp){
+    const val = parseFloat(inp.value);
+    if(!isNaN(val)&&val>0){ prices[ticker]=+val.toFixed(2); localStorage.setItem('equiti_prices',JSON.stringify(prices)); }
+  }
+  editingPriceTicker=null;
+  render();
+}
+
+// ── Render Records ──
+function renderRecords() {
+  const portfolio = getPortfolio();
+  const tickers = ['ALL',...new Set(records.map(r=>r.ticker))];
+
+  document.getElementById('rec-count').textContent = `共 ${records.length} 筆`;
+
+  // Filter buttons
+  document.getElementById('filter-row').innerHTML = tickers.map(t=>
+    `<button class="filter-btn${filterTicker===t?' active':''}" onclick="setFilter('${t}')">${t}</button>`
+  ).join('');
+
+  // Records list
+  const filtered = filterTicker==='ALL' ? [...records].reverse() : [...records].filter(r=>r.ticker===filterTicker).reverse();
+  const TYPE_LABEL = {buy:'買入',sell:'賣出',dividend:'股利'};
+  const TYPE_COLOR = {buy:'var(--green)',sell:'var(--red)',dividend:'var(--blue)'};
+  const TYPE_BG    = {buy:'var(--green-bg)',sell:'var(--red-bg)',dividend:'var(--blue-bg)'};
+
+  if(filtered.length===0){
+    document.getElementById('rec-list').innerHTML='<div style="text-align:center;padding:40px 0;color:var(--text4)">無紀錄</div>';
+    return;
+  }
+
+  document.getElementById('rec-list').innerHTML = filtered.map(r=>{
+    const isDiv = r.type==='dividend';
+    const amount = isDiv ? `<span class="rec-amount c-blue">$${fmt(r.dividend)}</span>`
+                         : `<span class="rec-amount c-text">$${fmt(r.shares*r.price)}</span>`;
+    const meta = isDiv
+      ? `<div class="rec-meta-div">
+           <div class="meta-item"><span class="meta-label">股利金額</span><span class="meta-val">$${fmt(r.dividend)}</span></div>
+           <div class="meta-item"><span class="meta-label">日期</span><span class="meta-val">${fmtDate(r.date)}</span></div>
+         </div>`
+      : `<div class="rec-meta">
+           <div class="meta-item"><span class="meta-label">股數</span><span class="meta-val">${fmtShares(r.shares)}</span></div>
+           <div class="meta-item"><span class="meta-label">成交價</span><span class="meta-val">$${r.price.toFixed(2)}</span></div>
+           <div class="meta-item"><span class="meta-label">手續費</span><span class="meta-val">$${fmt(r.commission||0)}</span></div>
+           <div class="meta-item"><span class="meta-label">日期</span><span class="meta-val">${fmtDate(r.date)}</span></div>
+         </div>`;
+    return `<div class="rec-item">
+      <div class="rec-top">
+        <div class="rec-left">
+          <span class="rec-ticker">${r.ticker}</span>
+          <span class="pill" style="background:${TYPE_BG[r.type]};color:${TYPE_COLOR[r.type]}">${TYPE_LABEL[r.type]}</span>
+        </div>
+        <div class="rec-right">
+          ${amount}
+          <button class="btn-outline" style="padding:4px 10px;font-size:.78rem" onclick="openEdit(${r.id})">修改</button>
+          <button class="btn-ghost" onclick="openDelete(${r.id})">✕</button>
+        </div>
+      </div>
+      ${meta}
+    </div>`;
+  }).join('');
+}
+
+function setFilter(t){ filterTicker=t; renderRecords(); }
+
+// ── Add Form ──
+let showingForm = false;
+function toggleForm(){
+  showingForm = !showingForm;
+  document.getElementById('add-form').style.display = showingForm?'block':'none';
+  document.getElementById('toggle-form-btn').textContent = showingForm?'✕ 取消':'+ 新增';
+  if(showingForm){ setType('buy'); renderFormFields(); }
+}
+
+function setType(t){
+  formType=t;
+  const idMap={buy:'buy',sell:'sell',dividend:'div'};
+  const tid=idMap[t]||t;
+  ['buy','sell','div'].forEach(x=>{
+    const btn=document.getElementById('type-'+x);
+    btn.style.background='transparent'; btn.style.color='var(--text3)';
+    btn.style.borderColor='var(--border3)';
+  });
+  const colors={buy:['var(--green-bg)','var(--green)','var(--green-border)'],sell:['var(--red-bg)','var(--red)','var(--red-border)'],dividend:['var(--blue-bg)','var(--blue)','var(--blue-border)']};
+  const [bg,col,brd]=colors[t];
+  const btn=document.getElementById('type-'+tid);
+  btn.style.background=bg; btn.style.color=col; btn.style.borderColor=brd;
+  renderFormFields();
+}
+
+function renderFormFields(){
+  const isDiv = formType==='dividend';
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('form-fields').innerHTML = `
+    <div class="field"><label>股票代碼</label><input id="f-ticker" type="text" inputmode="text" placeholder="e.g. AAPL" oninput="this.value=this.value.toUpperCase()"></div>
+    ${!isDiv?`
+    <div class="field"><label>股數</label><input id="f-shares" type="text" inputmode="decimal" placeholder="0"></div>
+    <div class="field"><label>成交價 (USD)</label><input id="f-price" type="text" inputmode="decimal" placeholder="0.00"></div>
+    <div class="field"><label>手續費 (USD)</label><input id="f-commission" type="text" inputmode="decimal" placeholder="0.00"></div>
+    `:''}
+    ${isDiv?`<div class="field"><label>股利金額 (USD)</label><input id="f-dividend" type="text" inputmode="decimal" placeholder="0.00" style="border-color:var(--blue-border)"></div>`:''}
+    <div class="field"><label>日期</label><input id="f-date" type="date" value="${today}"></div>`;
+}
+
+function showError(msg){ const el=document.getElementById('form-error'); el.textContent=msg; el.style.display='block'; }
+function hideError(){ document.getElementById('form-error').style.display='none'; }
+
+function submitForm(){
+  hideError();
+  const ticker=(document.getElementById('f-ticker').value||'').trim().toUpperCase();
+  if(!ticker){ showError('請填寫股票代碼'); return; }
+  const date=document.getElementById('f-date').value;
+  const isDiv=formType==='dividend';
+  if(isDiv){
+    const div=parseFloat(document.getElementById('f-dividend').value);
+    if(isNaN(div)||div<=0){ showError('請填寫股利金額'); return; }
+    records.push({id:Date.now(),ticker,name:TICKER_NAMES[ticker]||ticker,type:'dividend',shares:0,price:0,commission:0,dividend:div,date});
+  } else {
+    const shares=parseFloat(document.getElementById('f-shares').value);
+    const price=parseFloat(document.getElementById('f-price').value);
+    const comm=parseFloat(document.getElementById('f-commission').value)||0;
+    if(isNaN(shares)||shares<=0||isNaN(price)||price<=0){ showError('請填寫股數與價格'); return; }
+    records.push({id:Date.now(),ticker,name:TICKER_NAMES[ticker]||ticker,type:formType,shares,price,commission:comm,dividend:0,date});
+  }
+  save(); toggleForm(); render();
+}
+
+// ── Delete ──
+function openDelete(id){ deleteId=id; document.getElementById('del-modal').style.display='flex'; }
+function closeDelModal(){ document.getElementById('del-modal').style.display='none'; deleteId=null; }
+function confirmDelete(){ records=records.filter(r=>r.id!==deleteId); save(); closeDelModal(); render(); }
+
+// ── Edit ──
+function openEdit(id){
+  const r=records.find(x=>x.id===id);
+  if(!r) return;
+  editId=id; editType=r.type;
+  setEditType(r.type);
+  renderEditFields(r);
+  document.getElementById('edit-modal').style.display='flex';
+}
+function closeEditModal(){ document.getElementById('edit-modal').style.display='none'; editId=null; }
+
+function setEditType(t){
+  editType=t;
+  const eidMap={buy:'buy',sell:'sell',dividend:'div'};
+  const etid=eidMap[t]||t;
+  ['buy','sell','div'].forEach(x=>{
+    const btn=document.getElementById('etype-'+x);
+    btn.style.background='transparent'; btn.style.color='var(--text3)'; btn.style.borderColor='var(--border3)';
+  });
+  const colors={buy:['var(--green-bg)','var(--green)','var(--green-border)'],sell:['var(--red-bg)','var(--red)','var(--red-border)'],dividend:['var(--blue-bg)','var(--blue)','var(--blue-border)']};
+  const [bg,col,brd]=colors[t];
+  const btn=document.getElementById('etype-'+etid);
+  btn.style.background=bg; btn.style.color=col; btn.style.borderColor=brd;
+  const r=records.find(x=>x.id===editId);
+  if(r) renderEditFields({...r,type:t});
+}
+
+function renderEditFields(r){
+  const isDiv=editType==='dividend';
+  document.getElementById('edit-fields').innerHTML=`
+    <div class="field"><label>股票代碼</label><input id="e-ticker" type="text" inputmode="text" value="${r.ticker}" oninput="this.value=this.value.toUpperCase()"></div>
+    ${!isDiv?`
+    <div class="field"><label>股數</label><input id="e-shares" type="text" inputmode="decimal" value="${r.shares||''}"></div>
+    <div class="field"><label>成交價 (USD)</label><input id="e-price" type="text" inputmode="decimal" value="${r.price||''}"></div>
+    <div class="field"><label>手續費 (USD)</label><input id="e-commission" type="text" inputmode="decimal" value="${r.commission||''}"></div>
+    `:''}
+    ${isDiv?`<div class="field"><label>股利金額 (USD)</label><input id="e-dividend" type="text" inputmode="decimal" value="${r.dividend||''}" style="border-color:var(--blue-border)"></div>`:''}
+    <div class="field"><label>日期</label><input id="e-date" type="date" value="${r.date}"></div>`;
+}
+
+function saveEdit(){
+  const ticker=(document.getElementById('e-ticker').value||'').trim().toUpperCase();
+  if(!ticker) return;
+  const date=document.getElementById('e-date').value;
+  const isDiv=editType==='dividend';
+  records=records.map(r=>{
+    if(r.id!==editId) return r;
+    if(isDiv){
+      const div=parseFloat(document.getElementById('e-dividend').value)||0;
+      return {...r,ticker,name:TICKER_NAMES[ticker]||ticker,type:'dividend',shares:0,price:0,commission:0,dividend:div,date};
+    } else {
+      const shares=parseFloat(document.getElementById('e-shares').value)||0;
+      const price=parseFloat(document.getElementById('e-price').value)||0;
+      const comm=parseFloat(document.getElementById('e-commission').value)||0;
+      return {...r,ticker,name:TICKER_NAMES[ticker]||ticker,type:editType,shares,price,commission:comm,dividend:0,date};
+    }
+  });
+  save(); closeEditModal(); render();
+}
+
+
+// ── Twelve Data price updates ──
+// The API key is stored locally in this browser. Do not publish/share this file with a key embedded in it.
+const TWELVEDATA_KEY_STORAGE = 'equiti_twelvedata_api_key';
+const TWELVEDATA_API = 'https://api.twelvedata.com/quote';
+
+function setPriceUpdateStatus(message, isError=false) {
+  const el = document.getElementById('price-update-status');
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isError ? 'var(--red)' : 'var(--text4)';
+}
+
+function configureTwelveDataKey() {
+  const current = localStorage.getItem(TWELVEDATA_KEY_STORAGE) || '';
+  const key = window.prompt(
+    '請輸入 Twelve Data API Key：\n可至 https://twelvedata.com/ 申請。\n留空並按確定可清除已儲存的 Key。',
+    current
+  );
+  if (key === null) return;
+  if (!key.trim()) {
+    localStorage.removeItem(TWELVEDATA_KEY_STORAGE);
+    setPriceUpdateStatus('已清除 API Key；目前使用手動股價。');
+    return;
+  }
+  localStorage.setItem(TWELVEDATA_KEY_STORAGE, key.trim());
+  setPriceUpdateStatus('API Key 已儲存於此瀏覽器，可開始更新股價。');
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function updatePricesFromTwelveData() {
+  const apiKey = (localStorage.getItem(TWELVEDATA_KEY_STORAGE) || '').trim();
+  if (!apiKey) {
+    configureTwelveDataKey();
+    if (!(localStorage.getItem(TWELVEDATA_KEY_STORAGE) || '').trim()) {
+      setPriceUpdateStatus('請先設定 Twelve Data API Key。', true);
+      return;
+    }
+  }
+
+  const key = (localStorage.getItem(TWELVEDATA_KEY_STORAGE) || '').trim();
+  const portfolio = getPortfolio();
+  const tickers = [...new Set(portfolio.map(p => p.ticker).filter(Boolean))];
+
+  if (!tickers.length) {
+    setPriceUpdateStatus('目前沒有持倉可更新。', true);
+    return;
+  }
+
+  const btn = document.getElementById('update-prices-btn');
+  if (btn && btn.disabled) return;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '更新中…';
+  }
+
+  let succeeded = 0;
+  const errors = [];
+
+  try {
+    for (let i = 0; i < tickers.length; i++) {
+      const ticker = tickers[i];
+      setPriceUpdateStatus(`正在更新 ${ticker}（${i + 1}/${tickers.length}）…`);
+      try {
+        const url = `${TWELVEDATA_API}?symbol=${encodeURIComponent(ticker)}&apikey=${encodeURIComponent(key)}`;
+        const response = await fetch(url);
+        let data;
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error('回應格式無法讀取');
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        if (data.status === 'error' || data.code || data.message) {
+          throw new Error(data.message || `API 錯誤${data.code ? ' (' + data.code + ')' : ''}`);
+        }
+
+        const value = Number(data.close || data.price);
+        if (!Number.isFinite(value) || value <= 0) {
+          throw new Error('回傳資料沒有有效的收盤價');
+        }
+
+        prices[ticker] = Math.round(value * 100) / 100;
+        succeeded++;
+        // Twelve Data free plans may have per-minute credits; space requests apart.
+        if (i < tickers.length - 1) await delay(8000);
+      } catch (err) {
+        errors.push(`${ticker}: ${err.message || '更新失敗'}`);
+      }
+    }
+
+    localStorage.setItem('equiti_prices', JSON.stringify(prices));
+    render();
+
+    if (errors.length === 0) {
+      setPriceUpdateStatus(`更新完成：${succeeded}/${tickers.length} 支。價格已儲存。`);
+    } else {
+      const brief = errors.slice(0, 2).join('；');
+      setPriceUpdateStatus(`完成 ${succeeded}/${tickers.length} 支；失敗 ${errors.length} 支：${brief}${errors.length > 2 ? '…' : ''}`, true);
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '↻ 更新股價';
+    }
+  }
+}
+
+// ── Main render ──
+function render(){
+  const portfolio=getPortfolio();
+  if(currentPage==='home'){ renderSummary(portfolio); renderCards(portfolio); }
+  else { renderRecords(); }
+}
+
+// ── Init ──
+load();
+showPage('home');
+</script>
+</body>
+</html>
